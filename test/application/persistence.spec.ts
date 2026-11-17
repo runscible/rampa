@@ -31,7 +31,16 @@ describe('the service on a database file', () => {
     await ingestAll(before);
     const report = await before.report();
     expect(report.balances.bsPaidOut.toString()).toBe('129505.55');
-    expect(report.breaks).toHaveLength(8);
+    expect(report.breaks.map((b) => `${b.severity} ${b.type}`)).toEqual([
+      'BREAK SPREAD_EXCEEDED',
+      'BREAK NEGATIVE_BALANCE',
+      'BREAK LATE_FUNDING_WEBHOOK',
+      'BREAK DEPOSIT_WITHOUT_WEBHOOK',
+      'BREAK STUCK_PAYOUT',
+      'REVIEW PAYOUT_REVERSED',
+      'INFO UNCONFIRMED_PREVIEW',
+      'INFO DUPLICATE_DELIVERY',
+    ]);
 
     const after = open(file);
     expect(await after.report()).toEqual(report);
