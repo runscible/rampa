@@ -27,8 +27,13 @@ export const FEEDS: { [F in FeedName]: FeedKeys<FeedRecords[F]> } = {
   rates: { idOf: (r) => r.at.toISOString(), fingerprint: fingerprintRatePoint },
 };
 
+/** Keys of one feed. The cast is the price of a table of correlated types; it lives here and nowhere else. */
+export function feedKeys<F extends FeedName>(feed: F): FeedKeys<FeedRecords[F]> {
+  return FEEDS[feed] as FeedKeys<FeedRecords[F]>;
+}
+
 /** First delivery of each id wins; repeats are classified as duplicates or conflicts. */
 export function dedupeFeed<F extends FeedName>(feed: F, records: Array<FeedRecords[F]>): DedupeResult<FeedRecords[F]> {
-  const { idOf, fingerprint } = FEEDS[feed] as FeedKeys<FeedRecords[F]>;
+  const { idOf, fingerprint } = feedKeys(feed);
   return dedupeById(records, idOf, fingerprint);
 }

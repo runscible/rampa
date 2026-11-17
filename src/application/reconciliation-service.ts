@@ -1,4 +1,4 @@
-import { FEEDS, FeedKeys, FeedName, FeedRecords } from './feeds';
+import { feedKeys, FeedName, FeedRecords } from './feeds';
 import { Delivery, DeliveryRepository } from './ports';
 import { reconcile, ReconcileConfig, ReconcileResult } from './reconcile';
 
@@ -21,7 +21,7 @@ export function newDeliveries<F extends FeedName>(
   incoming: Array<FeedRecords[F]>,
   batch: number,
 ): Array<Delivery<FeedRecords[F]>> {
-  const { idOf, fingerprint } = FEEDS[feed] as FeedKeys<FeedRecords[F]>;
+  const { idOf, fingerprint } = feedKeys(feed);
   const keyOf = (record: FeedRecords[F]): string => `${idOf(record)}\u0000${fingerprint(record)}`;
   const alreadyStored = new Set(existing.map((d) => keyOf(d.record)));
   return incoming.filter((record) => !alreadyStored.has(keyOf(record))).map((record) => ({ record, batch }));
@@ -35,15 +35,15 @@ export class ReconciliationService {
   ) {}
 
   /** Ingestions run one at a time: each one reads the log and then appends to it, so two at once would both miss the other. */
-  private writes: Promise<unknown> = Promise.resolve();
+  private lastIngestion: Promise<unknown> = Promise.resolve();
 
   ingest<F extends FeedName>(feed: F, records: Array<FeedRecords[F]>): Promise<IngestSummary> {
-    const run = this.writes.then(() => this.store(feed, records));
-    this.writes = run.catch(() => undefined);
+    const run = this.lastIngestion.then(() => this.appendNewDeliveries(feed, records));
+    this.lastIngestion = run.catch(() => undefined);
     return run;
   }
 
-  private async store<F extends FeedName>(feed: F, records: Array<FeedRecords[F]>): Promise<IngestSummary> {
+  private async appendNewDeliveries<F extends FeedName>(feed: F, records: Array<FeedRecords[F]>): Promise<IngestSummary> {
     const existing = await this.repository.list(feed);
     const batch = existing.reduce((latest, d) => Math.max(latest, d.batch), 0) + 1;
     const fresh = newDeliveries(feed, existing, records, batch);

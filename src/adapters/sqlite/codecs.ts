@@ -44,3 +44,8 @@ export const CODECS: { [F in FeedName]: Codec<FeedRecords[F]> } = {
     decode: (stored) => createRatePoint(stored as { timestamp: string; rate: string }),
   },
 };
+
+/** Codec of one feed. The cast is the price of a table of correlated types; it lives here and nowhere else. */
+export function codecFor<F extends FeedName>(feed: F): Codec<FeedRecords[F]> {
+  return CODECS[feed] as Codec<FeedRecords[F]>;
+}

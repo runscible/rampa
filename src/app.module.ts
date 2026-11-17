@@ -21,13 +21,7 @@ export const DELIVERY_REPOSITORY = Symbol('DELIVERY_REPOSITORY');
     {
       provide: ReconciliationService,
       inject: [DELIVERY_REPOSITORY, APP_CONFIG],
-      useFactory: (repository: DeliveryRepository, config: AppConfig) =>
-        new ReconciliationService(repository, {
-          cutoff: config.cutoff,
-          fundingSlaMinutes: config.fundingSlaMinutes,
-          payoutSlaMinutes: config.payoutSlaMinutes,
-          maxSpread: config.maxSpread,
-        }),
+      useFactory: (repository: DeliveryRepository, config: AppConfig) => new ReconciliationService(repository, config),
     },
   ],
   exports: [APP_CONFIG],

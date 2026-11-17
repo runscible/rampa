@@ -8,9 +8,10 @@ import { postDeposit, postFunding, postPayout } from '../domain/ledger/posting';
 import { PayoutEvent } from '../domain/payouts/payout-event';
 import { FlaggedPayoutEvent, RejectedPayoutEvent, replayPayouts, totalInFlight } from '../domain/payouts/payout-state';
 import { RatePoint, RateTable } from '../domain/rates/rate-table';
+import { DedupeResult } from '../domain/shared/dedupe';
 import { Money } from '../domain/shared/money';
 import { parseInstant } from '../domain/shared/time';
-import { dedupeFeed } from './feeds';
+import { dedupeFeed, FeedName, feedKeys, FeedRecords } from './feeds';
 
 export interface ReconcileInput {
   deposits: Deposit[];
@@ -70,8 +71,10 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
   const lifecycle = replayPayouts(payouts.unique.filter(upToCutoff));
 
   const byId = (a: JournalEntry, b: JournalEntry) => a.id.localeCompare(b.id);
-  const depositEntries = deposits.unique.filter(upToCutoff).map(postDeposit).sort(byId);
-  const fundingEntries = funding.unique.filter(upToCutoff).map(postFunding).sort(byId);
+  const depositsInReport = deposits.unique.filter(upToCutoff);
+  const fundingInReport = funding.unique.filter(upToCutoff);
+  const depositEntries = depositsInReport.map(postDeposit).sort(byId);
+  const fundingEntries = fundingInReport.map(postFunding).sort(byId);
   const payoutEntries = lifecycle.accepted.flatMap((e) => postPayout(e) ?? []); // already in lifecycle order
 
   // Sorting by instant only is deliberate: the sort is stable, so entries at the same instant keep the order
@@ -80,13 +83,17 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
   assertBalanced(ledger);
 
   // Repeats are part of the report only if they happened by the cutoff, like everything else.
+  const repeatsOf = <F extends FeedName>(feed: F, result: DedupeResult<FeedRecords[F]>, kind: 'duplicates' | 'conflicts'): RepeatedId[] =>
+    result[kind].map((record) => ({ id: feedKeys(feed).idOf(record), at: record.at }));
   const repeated = (kind: 'duplicates' | 'conflicts'): RepeatedId[] =>
     [
-      ...deposits[kind].map((d) => ({ id: d.txHash, at: d.at })),
-      ...funding[kind].map((e) => ({ id: e.eventId, at: e.at })),
-      ...payouts[kind].map((e) => ({ id: e.eventId, at: e.at })),
-      ...rates[kind].map((r) => ({ id: r.at.toISOString(), at: r.at })),
+      ...repeatsOf('deposits', deposits, kind),
+      ...repeatsOf('fundingEvents', funding, kind),
+      ...repeatsOf('payoutEvents', payouts, kind),
+      ...repeatsOf('rates', rates, kind),
     ].filter(upToCutoff);
+  const duplicates = repeated('duplicates');
+  const conflicts = repeated('conflicts');
 
   const accounts = accountBalances(ledger);
   return {
@@ -101,18 +108,18 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
     breaks: findBreaks({
       cutoff,
       thresholds,
-      deposits: deposits.unique.filter(upToCutoff),
-      fundingEvents: funding.unique.filter(upToCutoff),
+      deposits: depositsInReport,
+      fundingEvents: fundingInReport,
       rates: new RateTable(rates.unique),
       lifecycle,
       ledger,
-      duplicates: repeated('duplicates'),
-      conflicts: repeated('conflicts'),
+      duplicates,
+      conflicts,
     }),
     ledger,
     ingestion: {
-      duplicateIds: repeated('duplicates').map((r) => r.id),
-      conflictingIds: repeated('conflicts').map((r) => r.id),
+      duplicateIds: duplicates.map((r) => r.id),
+      conflictingIds: conflicts.map((r) => r.id),
       irregularPayoutEvents: lifecycle.irregular,
       rejectedPayoutEvents: lifecycle.rejected,
     },

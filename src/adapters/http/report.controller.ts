@@ -14,30 +14,36 @@ export class ReportController {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
+  /** Runs the reconciliation as of the requested cutoff (or the configured one) and says which instant that was. */
+  private async asOf(cutoff?: string) {
+    const instant = cutoff ?? this.config.cutoff;
+    return { instant, result: await this.service.report(instant) };
+  }
+
   @Get('balances')
   async balances(@Query('cutoff', CutoffPipe) cutoff?: string) {
-    const asOf = cutoff ?? this.config.cutoff;
-    return { asOf, balances: balancesJson((await this.service.report(asOf)).balances) };
+    const { instant, result } = await this.asOf(cutoff);
+    return { asOf: instant, balances: balancesJson(result.balances) };
   }
 
   @Get('breaks')
   async breaks(@Query('cutoff', CutoffPipe) cutoff?: string) {
-    const asOf = cutoff ?? this.config.cutoff;
+    const { instant, result } = await this.asOf(cutoff);
     const { timeZone } = this.config;
-    return { asOf, timeZone, breaks: breaksJson((await this.service.report(asOf)).breaks, timeZone) };
+    return { asOf: instant, timeZone, breaks: breaksJson(result.breaks, timeZone) };
   }
 
   @Get('ledger')
   async ledger(@Query('cutoff', CutoffPipe) cutoff?: string) {
-    const asOf = cutoff ?? this.config.cutoff;
-    return { asOf, ledger: ledgerJson((await this.service.report(asOf)).ledger) };
+    const { instant, result } = await this.asOf(cutoff);
+    return { asOf: instant, ledger: ledgerJson(result.ledger) };
   }
 
   /** The whole report: JSON by default, plain text with `Accept: text/plain`. */
   @Get('report')
   async report(@Res() res: Response, @Query('cutoff', CutoffPipe) cutoff?: string): Promise<void> {
-    const options = { cutoff: cutoff ?? this.config.cutoff, timeZone: this.config.timeZone };
-    const result = await this.service.report(options.cutoff);
+    const { instant, result } = await this.asOf(cutoff);
+    const options = { cutoff: instant, timeZone: this.config.timeZone };
     const json = (): void => void res.type('application/json').send(renderJsonReport(result, options));
     res.format({
       'application/json': json,

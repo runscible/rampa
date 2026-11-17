@@ -26,25 +26,25 @@ export class IngestController {
   @Post('deposits')
   @HttpCode(200)
   deposits(@Body() body: unknown): Promise<IngestSummary> {
-    return this.store('deposits', parseDeposits(this.csv(body)));
+    return this.saveOrReject('deposits', parseDeposits(this.csv(body)));
   }
 
   @Post('rates')
   @HttpCode(200)
   rates(@Body() body: unknown): Promise<IngestSummary> {
-    return this.store('rates', parseRates(this.csv(body)));
+    return this.saveOrReject('rates', parseRates(this.csv(body)));
   }
 
   @Post('funding-webhooks')
   @HttpCode(200)
   fundingWebhooks(@Body() body: unknown): Promise<IngestSummary> {
-    return this.store('fundingEvents', fundingEventsFromJson(body));
+    return this.saveOrReject('fundingEvents', fundingEventsFromJson(body));
   }
 
   @Post('payout-events')
   @HttpCode(200)
   payoutEvents(@Body() body: unknown): Promise<IngestSummary> {
-    return this.store('payoutEvents', payoutEventsFromJson(body));
+    return this.saveOrReject('payoutEvents', payoutEventsFromJson(body));
   }
 
   private csv(body: unknown): string {
@@ -52,7 +52,7 @@ export class IngestController {
     return body;
   }
 
-  private async store<F extends FeedName>(feed: F, parsed: { records: Array<FeedRecords[F]>; errors: ParseError[] }): Promise<IngestSummary> {
+  private async saveOrReject<F extends FeedName>(feed: F, parsed: { records: Array<FeedRecords[F]>; errors: ParseError[] }): Promise<IngestSummary> {
     if (parsed.errors.length > 0) {
       throw new UnprocessableEntityException({
         message: `${ROUTE_NAMES[feed]}: ${parsed.errors.length} invalid record(s); nothing was stored`,
