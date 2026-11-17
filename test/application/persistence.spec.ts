@@ -44,6 +44,7 @@ describe('the service on a database file', () => {
 
     const after = open(file);
     expect(await after.report()).toEqual(report);
+    expect(report.version).toBe(76); // 5 deposits + 14 rates + 4 webhooks + 53 pay-out events
     const again = await ingestAll(after);
     expect(Object.values(again).map((s) => s.stored)).toEqual([0, 0, 0, 0]);
     expect(await after.report()).toEqual(report);

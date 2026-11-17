@@ -1,4 +1,5 @@
-import { Balances, ReconcileResult } from '../../application/reconcile';
+import { Balances } from '../../application/reconcile';
+import { Report } from '../../application/reconciliation-service';
 import { Break } from '../../domain/breaks/break';
 import { ACCOUNT_CURRENCY, JournalEntry } from '../../domain/ledger/ledger';
 import { formatInZone } from '../../domain/shared/time';
@@ -11,6 +12,7 @@ export const balancesJson = (b: Balances) => ({
   bsAvailable: b.bsAvailable.toString(),
   bsPaidOut: b.bsPaidOut.toString(),
   bsInFlight: b.bsInFlight.toString(),
+  bsPaidOutIncompleteHistory: b.bsPaidOutIncompleteHistory.toString(),
 });
 
 /** Breaks with their instants both in UTC and in the given time zone. */
@@ -34,13 +36,16 @@ export const ledgerJson = (ledger: JournalEntry[]) =>
   }));
 
 /** Machine-readable report. No clock and no randomness: the same inputs give the same bytes. */
-export function renderJsonReport(result: ReconcileResult, options: ReportOptions): string {
+export function renderJsonReport(result: Report, options: ReportOptions): string {
   const flagged = (items: Array<{ event: { eventId: string; payoutId: string }; reason: string }>) =>
     items.map(({ event, reason }) => ({ eventId: event.eventId, payoutId: event.payoutId, reason }));
 
   const report = {
     asOf: options.cutoff,
     timeZone: options.timeZone,
+    version: result.version,
+    status: result.status,
+    breakCounts: result.breakCounts,
     balances: balancesJson(result.balances),
     breaks: breaksJson(result.breaks, options.timeZone),
     ingestion: {

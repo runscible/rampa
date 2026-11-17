@@ -3,7 +3,7 @@ import { parseFundingEvents } from '../../src/adapters/files/parse-funding';
 import { parsePayoutEvents } from '../../src/adapters/files/parse-payouts';
 import { parseRates } from '../../src/adapters/files/parse-rates';
 import { InMemoryDeliveryRepository } from '../../src/adapters/memory/in-memory-delivery-repository';
-import { ReconcileResult } from '../../src/application/reconcile';
+import { Report } from '../../src/application/reconciliation-service';
 import { ReconciliationService } from '../../src/application/reconciliation-service';
 import { readData } from './app';
 import { CUTOFF } from './builders';
@@ -19,6 +19,6 @@ export async function serviceWithRealData(): Promise<ReconciliationService> {
 }
 
 /** The reconciliation of the four provided files as of the configured cutoff. */
-export async function reconcileRealData(): Promise<ReconcileResult> {
+export async function reconcileRealData(): Promise<Report> {
   return (await serviceWithRealData()).report();
 }

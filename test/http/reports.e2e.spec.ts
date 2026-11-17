@@ -12,8 +12,9 @@ describe('GET /balances, /breaks, /ledger, /report', () => {
   const http = () => request(app.getHttpServer());
   const at = (hhmm: string) => encodeURIComponent(`2026-10-05T${hhmm}:00-04:00`);
 
-  it('start empty: zeros and no breaks', async () => {
+  it('start empty: zeros, no breaks, reconciled, version 0', async () => {
     const balances = await http().get('/balances').expect(200);
+    expect(balances.body).toMatchObject({ version: 0, status: 'RECONCILED' });
     expect(balances.body.balances.bsPaidOut).toBe('0.00');
     expect((await http().get('/breaks').expect(200)).body.breaks).toEqual([]);
     expect((await http().get('/ledger').expect(200)).body.ledger).toEqual([]);
@@ -22,10 +23,12 @@ describe('GET /balances, /breaks, /ledger, /report', () => {
   describe('after ingesting the four provided files', () => {
     beforeEach(() => ingestAllFiles(app));
 
-    it('GET /balances gives the numbers of the plan', async () => {
+    it('GET /balances gives the numbers of the plan, says it needs review and which data it was computed from', async () => {
       const res = await http().get('/balances').expect(200);
       expect(res.body).toEqual({
         asOf: '2026-10-05T20:00:00-04:00',
+        version: 76,
+        status: 'NEEDS_REVIEW',
         balances: {
           usdtUnconverted: '1500.00',
           usdtConverted: '14500.00',
@@ -33,8 +36,26 @@ describe('GET /balances, /breaks, /ledger, /report', () => {
           bsAvailable: '12120.95',
           bsPaidOut: '129505.55',
           bsInFlight: '3900.00',
+          bsPaidOutIncompleteHistory: '0.00',
         },
       });
+    });
+
+    it('every read carries the version, and it does not move when the files are sent again', async () => {
+      const paths = ['/balances', '/breaks', '/ledger', '/report', '/payouts', '/payouts/P018', '/deposits/0x080f626098377e96e40b2ff0260738034149998b08e5c086b940ae567580c32c'];
+      for (const path of paths) expect((await http().get(path).expect(200)).body.version).toBe(76);
+      await ingestAllFiles(app);
+      for (const path of paths) expect((await http().get(path).expect(200)).body.version).toBe(76);
+    });
+
+    it('the version grows when something new is delivered', async () => {
+      await http().post('/ingest/deposits').set('Content-Type', 'text/csv').send('tx_hash,amount_usdt,timestamp\n0xnew,10.00,2026-10-05T10:00:00-04:00\n').expect(200);
+      expect((await http().get('/balances').expect(200)).body.version).toBe(77);
+    });
+
+    it('GET /breaks says the status too', async () => {
+      const { body } = await http().get('/breaks').expect(200);
+      expect(body).toMatchObject({ version: 76, status: 'NEEDS_REVIEW', breakCounts: { BREAK: 5, REVIEW: 1, INFO: 2 } });
     });
 
     it('GET /breaks lists the 5 breaks, 1 review and 2 info of the plan, in local time too', async () => {

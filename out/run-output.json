@@ -1,13 +1,21 @@
 {
   "asOf": "2026-10-05T20:00:00-04:00",
   "timeZone": "America/La_Paz",
+  "version": 76,
+  "status": "NEEDS_REVIEW",
+  "breakCounts": {
+    "BREAK": 5,
+    "REVIEW": 1,
+    "INFO": 2
+  },
   "balances": {
     "usdtUnconverted": "1500.00",
     "usdtConverted": "14500.00",
     "bsFunded": "141626.50",
     "bsAvailable": "12120.95",
     "bsPaidOut": "129505.55",
-    "bsInFlight": "3900.00"
+    "bsInFlight": "3900.00",
+    "bsPaidOutIncompleteHistory": "0.00"
   },
   "breaks": [
     {

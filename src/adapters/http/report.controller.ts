@@ -27,20 +27,20 @@ export class ReportController {
   @Get('balances')
   async balances(@Query('cutoff', CutoffPipe) cutoff?: string) {
     const { instant, result } = await this.asOf(cutoff);
-    return { asOf: instant, balances: balancesJson(result.balances) };
+    return { asOf: instant, version: result.version, status: result.status, balances: balancesJson(result.balances) };
   }
 
   @Get('breaks')
   async breaks(@Query('cutoff', CutoffPipe) cutoff?: string) {
     const { instant, result } = await this.asOf(cutoff);
     const { timeZone } = this.config;
-    return { asOf: instant, timeZone, breaks: breaksJson(result.breaks, timeZone) };
+    return { asOf: instant, version: result.version, status: result.status, breakCounts: result.breakCounts, timeZone, breaks: breaksJson(result.breaks, timeZone) };
   }
 
   @Get('ledger')
   async ledger(@Query('cutoff', CutoffPipe) cutoff?: string) {
     const { instant, result } = await this.asOf(cutoff);
-    return { asOf: instant, ledger: ledgerJson(result.ledger) };
+    return { asOf: instant, version: result.version, ledger: ledgerJson(result.ledger) };
   }
 
   /** One pay-out: state, every event received (applied or not, and why), missing steps, money moved, its breaks. */
@@ -49,7 +49,7 @@ export class ReportController {
     const { instant, result } = await this.asOf(cutoff);
     const view = result.operations.payouts.find((p) => p.payoutId === payoutId);
     if (!view) throw new NotFoundException(`No events for pay-out ${payoutId} as of ${instant}`);
-    return { asOf: instant, timeZone: this.config.timeZone, payout: payoutViewJson(view, this.config.timeZone) };
+    return { asOf: instant, version: result.version, timeZone: this.config.timeZone, payout: payoutViewJson(view, this.config.timeZone) };
   }
 
   /** Every pay-out, optionally only those in one state (`?state=CONFIRMED` finds what is still in flight). */
@@ -60,7 +60,7 @@ export class ReportController {
     }
     const { instant, result } = await this.asOf(cutoff);
     const views = result.operations.payouts.filter((p) => state === undefined || p.state === state);
-    return { asOf: instant, timeZone: this.config.timeZone, payouts: views.map((p) => payoutViewJson(p, this.config.timeZone)) };
+    return { asOf: instant, version: result.version, timeZone: this.config.timeZone, payouts: views.map((p) => payoutViewJson(p, this.config.timeZone)) };
   }
 
   /** One deposit: what came in, every webhook that converted it and what they credited, its breaks. */
@@ -69,7 +69,7 @@ export class ReportController {
     const { instant, result } = await this.asOf(cutoff);
     const view = result.operations.deposits.find((d) => d.txHash === txHash);
     if (!view) throw new NotFoundException(`Nothing known about deposit ${txHash} as of ${instant}`);
-    return { asOf: instant, timeZone: this.config.timeZone, deposit: depositViewJson(view, this.config.timeZone) };
+    return { asOf: instant, version: result.version, timeZone: this.config.timeZone, deposit: depositViewJson(view, this.config.timeZone) };
   }
 
   /** The whole report: JSON by default, plain text with `Accept: text/plain`. */

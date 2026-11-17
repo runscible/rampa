@@ -1,6 +1,7 @@
-import { Break, BreakThresholds, DEFAULT_THRESHOLDS } from '../domain/breaks/break';
+import { Break, BreakSeverity, BreakThresholds, DEFAULT_THRESHOLDS } from '../domain/breaks/break';
 import { RepeatedId } from '../domain/breaks/context';
 import { findBreaks } from '../domain/breaks/find-breaks';
+import { breakCounts, ReconciliationStatus, reconciliationStatus } from '../domain/breaks/status';
 import { Deposit } from '../domain/deposits/deposit';
 import { FundingEvent } from '../domain/funding/funding-event';
 import { buildDepositViews, DepositView } from '../domain/operations/deposit-view';
@@ -37,6 +38,8 @@ export interface Balances {
   bsAvailable: Money;
   /** Bs paid out: COMPLETED pay-outs net of REVERSED ones. */
   bsPaidOut: Money;
+  /** Of the Bs paid out, what belongs to pay-outs with steps missing from their history: real money, less certain history. */
+  bsPaidOutIncompleteHistory: Money;
   /** Bs in confirmed pay-outs that are not final yet. */
   bsInFlight: Money;
 }
@@ -57,6 +60,10 @@ export interface Operations {
 }
 
 export interface ReconcileResult {
+  /** RECONCILED when there is nothing to review; NEEDS_REVIEW when there is at least one break or review item. */
+  status: ReconciliationStatus;
+  /** How many findings there are of each severity. */
+  breakCounts: Record<BreakSeverity, number>;
   balances: Balances;
   /** Everything that does not reconcile or needs a human look, most severe first. */
   breaks: Break[];
@@ -114,22 +121,30 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
     conflicts,
   });
 
+  const operations: Operations = {
+    payouts: buildPayoutViews(lifecycle, ledger, breaks),
+    deposits: buildDepositViews(depositsInReport, fundingInReport, breaks),
+  };
+  const paidOutWithGaps = operations.payouts
+    .filter((p) => p.missingSteps.length > 0)
+    .reduce((sum, p) => sum.plus(p.paidOutBs), Money.zero('BS'));
+
   const accounts = accountBalances(ledger);
   return {
+    status: reconciliationStatus(breaks),
+    breakCounts: breakCounts(breaks),
     balances: {
       usdtUnconverted: accounts.get('USDT_WALLET_PENDING') ?? Money.zero('USDT'),
       usdtConverted: accounts.get('USDT_CONVERTED') ?? Money.zero('USDT'),
       bsFunded: (accounts.get('FX_CLEARING') ?? Money.zero('BS')).negate(),
       bsAvailable: accounts.get('BS_PROVIDER_BALANCE') ?? Money.zero('BS'),
       bsPaidOut: accounts.get('BS_PAID_OUT') ?? Money.zero('BS'),
+      bsPaidOutIncompleteHistory: paidOutWithGaps,
       bsInFlight: totalInFlight(lifecycle.payouts),
     },
     breaks,
     ledger,
-    operations: {
-      payouts: buildPayoutViews(lifecycle, ledger, breaks),
-      deposits: buildDepositViews(depositsInReport, fundingInReport, breaks),
-    },
+    operations,
     ingestion: {
       duplicateIds: duplicates.map((r) => r.id),
       conflictingIds: conflicts.map((r) => r.id),

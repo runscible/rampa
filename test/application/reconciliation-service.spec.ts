@@ -81,6 +81,32 @@ describe('ReconciliationService', () => {
     expect((await service.report()).balances.usdtUnconverted.toString()).toBe('150.00');
   });
 
+  describe('version: how much has been delivered so far', () => {
+    it('is 0 before anything arrives, and counts every delivery stored', async () => {
+      const service = newService();
+      expect((await service.report()).version).toBe(0);
+      await service.ingest('deposits', [dep('0x1', '100.00', '09:00'), dep('0x2', '50.00', '09:30')]);
+      expect((await service.report()).version).toBe(2);
+      await service.ingest('rates', [rate('07:00', '10')]);
+      expect((await service.report()).version).toBe(3);
+    });
+
+    it('does not move when the same data is sent again, so a caller can tell nothing changed', async () => {
+      const service = newService();
+      const batch = [dep('0x1', '100.00', '09:00')];
+      await service.ingest('deposits', batch);
+      const before = (await service.report()).version;
+      await service.ingest('deposits', batch);
+      expect((await service.report()).version).toBe(before);
+    });
+
+    it('does not depend on the cutoff', async () => {
+      const service = newService();
+      await service.ingest('deposits', [dep('0x1', '100.00', '09:00'), dep('0x2', '50.00', '15:00')]);
+      expect((await service.report(at('08:00'))).version).toBe((await service.report(at('20:00'))).version);
+    });
+  });
+
   it('does not depend on which feed arrives first', async () => {
     const deposits = [dep('0x1', '1000.00', '09:00')];
     const fundings = [fw('fw_1', '0x1', 1000, '9.95', 9950, '09:05')];

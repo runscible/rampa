@@ -10,6 +10,15 @@ export interface IngestSummary {
   ignored: number;
 }
 
+/** A reconciliation plus the version of the data it was computed from. */
+export type Report = ReconcileResult & {
+  /**
+   * How many deliveries are stored, whatever the cutoff. It grows with every new delivery and does not move when the
+   * same data is sent again, so the same version and cutoff always give the same answer.
+   */
+  version: number;
+};
+
 /**
  * Deliveries to add for an incoming batch. One that is identical (same id, same content) to a delivery from an
  * earlier batch is a retry and is dropped, so sending the same data again changes nothing. Repeats inside the
@@ -52,17 +61,17 @@ export class ReconciliationService {
   }
 
   /** The reconciliation as of `cutoff` (default: the configured one), rebuilt from everything delivered so far. */
-  async report(cutoff: string = this.config.cutoff): Promise<ReconcileResult> {
-    const records = async <F extends FeedName>(feed: F): Promise<Array<FeedRecords[F]>> =>
-      (await this.repository.list(feed)).map((d) => d.record);
-    return reconcile(
-      {
-        deposits: await records('deposits'),
-        fundingEvents: await records('fundingEvents'),
-        payoutEvents: await records('payoutEvents'),
-        rates: await records('rates'),
-      },
+  async report(cutoff: string = this.config.cutoff): Promise<Report> {
+    const deposits = await this.repository.list('deposits');
+    const fundingEvents = await this.repository.list('fundingEvents');
+    const payoutEvents = await this.repository.list('payoutEvents');
+    const rates = await this.repository.list('rates');
+    const recordsOf = <T>(deliveries: Array<Delivery<T>>): T[] => deliveries.map((d) => d.record);
+
+    const result = reconcile(
+      { deposits: recordsOf(deposits), fundingEvents: recordsOf(fundingEvents), payoutEvents: recordsOf(payoutEvents), rates: recordsOf(rates) },
       { ...this.config, cutoff },
     );
+    return { ...result, version: deposits.length + fundingEvents.length + payoutEvents.length + rates.length };
   }
 }

@@ -11,7 +11,14 @@ describe('the four provided files (the numbers of the plan)', () => {
       bsAvailable: '12120.95',
       bsPaidOut: '129505.55',
       bsInFlight: '3900.00',
+      bsPaidOutIncompleteHistory: '0.00',
     });
+  });
+
+  it('needs review: 5 breaks, 1 review and 2 info', async () => {
+    const { status, breakCounts } = await reconcileRealData();
+    expect(status).toBe('NEEDS_REVIEW');
+    expect(breakCounts).toEqual({ BREAK: 5, REVIEW: 1, INFO: 2 });
   });
 
   it('the ledger balances in both currencies', async () => {

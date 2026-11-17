@@ -1,5 +1,6 @@
 RAMPA RECONCILIATION REPORT
 As of 2026-10-05T20:00:00-04:00 (America/La_Paz)
+Status: NEEDS_REVIEW (data version 76)
 
 BALANCES
   USDT sent, not yet converted             1,500.00 USDT
@@ -7,6 +8,7 @@ BALANCES
   Bs funded                                141,626.50 Bs
   Bs available at provider                  12,120.95 Bs
   Bs paid out                              129,505.55 Bs
+    of which incomplete history                  0.00 Bs
   Bs in pay-outs not final                   3,900.00 Bs
 
 BREAKS (5 breaks, 1 review, 2 info)

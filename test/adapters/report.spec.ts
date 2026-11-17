@@ -1,12 +1,11 @@
 import { InMemoryDeliveryRepository } from '../../src/adapters/memory/in-memory-delivery-repository';
-import { ReconcileResult } from '../../src/application/reconcile';
-import { ReconciliationService } from '../../src/application/reconciliation-service';
+import { Report, ReconciliationService } from '../../src/application/reconciliation-service';
 import { renderJsonReport } from '../../src/adapters/report/json-report';
 import { formatAmount, renderTextReport } from '../../src/adapters/report/text-report';
 import { reconcileRealData } from '../support/real-data';
 
 const OPTIONS = { cutoff: '2026-10-05T20:00:00-04:00', timeZone: 'America/La_Paz' };
-let result: ReconcileResult;
+let result: Report;
 beforeAll(async () => {
   result = await reconcileRealData();
 });
@@ -32,6 +31,14 @@ describe('renderTextReport', () => {
 
   it('states the cutoff and time zone', () => {
     expect(text).toContain('As of 2026-10-05T20:00:00-04:00 (America/La_Paz)');
+  });
+
+  it('says whether it is reconciled and which data it was computed from', () => {
+    expect(text).toContain('Status: NEEDS_REVIEW (data version 76)');
+  });
+
+  it('shows how much of the Bs paid out has an incomplete history', () => {
+    expect(text).toMatch(/of which incomplete history\s+0\.00 Bs/);
   });
 
   it('lists the balances of the plan', () => {
@@ -64,6 +71,7 @@ describe('renderTextReport', () => {
   it('says so when there is nothing wrong', async () => {
     const empty = await new ReconciliationService(new InMemoryDeliveryRepository(), { cutoff: OPTIONS.cutoff }).report();
     expect(renderTextReport(empty, OPTIONS)).toContain('BREAKS (none)');
+    expect(renderTextReport(empty, OPTIONS)).toContain('Status: RECONCILED (data version 0)');
   });
 
   it('is deterministic: no clock, no randomness', () => {
@@ -79,6 +87,9 @@ describe('renderJsonReport', () => {
 
   it('carries the cutoff, zone and balances as exact strings', () => {
     expect(json.asOf).toBe(OPTIONS.cutoff);
+    expect(json.status).toBe('NEEDS_REVIEW');
+    expect(json.version).toBe(76);
+    expect(json.breakCounts).toEqual({ BREAK: 5, REVIEW: 1, INFO: 2 });
     expect(json.timeZone).toBe('America/La_Paz');
     expect(json.balances).toEqual({
       usdtUnconverted: '1500.00',
@@ -87,6 +98,7 @@ describe('renderJsonReport', () => {
       bsAvailable: '12120.95',
       bsPaidOut: '129505.55',
       bsInFlight: '3900.00',
+      bsPaidOutIncompleteHistory: '0.00',
     });
   });
 

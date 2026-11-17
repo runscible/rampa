@@ -1,7 +1,7 @@
 import { Break, BreakSeverity } from '../../domain/breaks/break';
 import { ACCOUNT_CURRENCY, accountBalances, assertBalanced } from '../../domain/ledger/ledger';
 import { formatInZone, Instant } from '../../domain/shared/time';
-import { ReconcileResult } from '../../application/reconcile';
+import { Report } from '../../application/reconciliation-service';
 
 export interface ReportOptions {
   /** Report instant, as configured (ISO-8601 with offset). */
@@ -27,12 +27,12 @@ const SEVERITIES: Array<{ severity: BreakSeverity; singular: string; plural: str
 const pad = (text: string, width: number): string => text.padEnd(width);
 const money = (amount: { toString(): string }, currency: string): string => `${formatAmount(amount.toString())} ${currency}`;
 
-export function renderTextReport(result: ReconcileResult, options: ReportOptions): string {
+export function renderTextReport(result: Report, options: ReportOptions): string {
   const local = (instant: Instant): string => formatInZone(instant, options.timeZone).slice(0, 19).replace('T', ' ');
   const lines: string[] = [];
   const section = (title: string) => lines.push('', title);
 
-  lines.push('RAMPA RECONCILIATION REPORT', `As of ${options.cutoff} (${options.timeZone})`);
+  lines.push('RAMPA RECONCILIATION REPORT', `As of ${options.cutoff} (${options.timeZone})`, `Status: ${result.status} (data version ${result.version})`);
 
   const b = result.balances;
   section('BALANCES');
@@ -42,6 +42,7 @@ export function renderTextReport(result: ReconcileResult, options: ReportOptions
     ['Bs funded', money(b.bsFunded, 'Bs')],
     ['Bs available at provider', money(b.bsAvailable, 'Bs')],
     ['Bs paid out', money(b.bsPaidOut, 'Bs')],
+    ['  of which incomplete history', money(b.bsPaidOutIncompleteHistory, 'Bs')],
     ['Bs in pay-outs not final', money(b.bsInFlight, 'Bs')],
   ];
   for (const [label, value] of balanceRows) lines.push(`  ${pad(label, 30)}${value.padStart(24)}`);

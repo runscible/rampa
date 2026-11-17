@@ -365,3 +365,37 @@ describe('report', () => {
     expect(CUTOFF).toBe('2026-10-05T20:00:00-04:00');
   });
 });
+
+describe('status and the paid-out portion with an incomplete history', () => {
+  it('nothing ingested is RECONCILED', () => {
+    expect(run().status).toBe('RECONCILED');
+    expect(run().breakCounts).toEqual({ BREAK: 0, REVIEW: 0, INFO: 0 });
+  });
+
+  it('only informational findings leave it RECONCILED', () => {
+    const r = run({ payoutEvents: [ev('a', 'P9', 'PREVIEW', 100, '09:00')] });
+    expect(r.breaks.map((b) => b.type)).toEqual(['UNCONFIRMED_PREVIEW']);
+    expect(r.status).toBe('RECONCILED');
+  });
+
+  it('a break makes it NEEDS_REVIEW', () => {
+    expect(run({ deposits: [dep('0x1', '10.00', '09:00')] }).status).toBe('NEEDS_REVIEW');
+  });
+
+  it('shows how much of the Bs paid out belongs to pay-outs with missing steps', () => {
+    const r = run({
+      payoutEvents: [...lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05']), ev('x', 'P2', 'PREVIEW', 40, '10:00'), ev('y', 'P2', 'COMPLETED', 40, '10:05')],
+    });
+    expect(r.balances.bsPaidOut.toString()).toBe('140.00');
+    expect(r.balances.bsPaidOutIncompleteHistory.toString()).toBe('40.00');
+  });
+
+  it('a pay-out with a complete history contributes nothing to it', () => {
+    expect(run({ payoutEvents: lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05']) }).balances.bsPaidOutIncompleteHistory.toString()).toBe('0.00');
+  });
+
+  it('a pay-out that was completed with a gap and then fully reversed contributes nothing: no money is left paid out', () => {
+    const r = run({ payoutEvents: [ev('p', 'P1', 'PREVIEW', 100, '09:00'), ev('c', 'P1', 'COMPLETED', 100, '09:05'), ev('r', 'P1', 'REVERSED', 100, '10:00')] });
+    expect(r.balances.bsPaidOutIncompleteHistory.toString()).toBe('0.00');
+  });
+});

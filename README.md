@@ -18,7 +18,7 @@ It is the **book of record and auditor** of the flow: it keeps what each party r
 
 **What callers can rely on**
 - Input: sending the same data again changes nothing, the order does not matter, and a request is stored completely or not at all.
-- Output: every figure is rebuilt from the delivery log, so it can be traced back to events. Events that make no sense are not applied, but they show up as breaks and stay in the history of their pay-out with the reason. What the service cannot corroborate is reported as a break or a review, never smoothed over.
+- Output: every figure is rebuilt from the delivery log, so it can be traced back to events, and every answer says which data it was computed from (`version`) and whether it can be taken as settled (`status`). Events that make no sense are not applied, but they show up as breaks and stay in the history of their pay-out with the reason. What the service cannot corroborate is reported as a break or a review, never smoothed over.
 
 ## Run it
 
@@ -48,7 +48,7 @@ State is kept in SQLite (`recon.sqlite` in the working directory), so a restart 
 | `POST /ingest/rates` | `text/csv` (`reference_rates.csv`) | same |
 | `POST /ingest/funding-webhooks` | JSON array (`funding_webhooks.json`) | same |
 | `POST /ingest/payout-events` | JSON array (`payout_events.json`) | same |
-| `GET /balances` | | the six balances: USDT unconverted and converted, Bs funded, available, paid out and in flight |
+| `GET /balances` | | the balances (USDT unconverted and converted; Bs funded, available, paid out, in flight) and, of the Bs paid out, how much belongs to pay-outs with an incomplete history |
 | `GET /breaks` | | breaks report, instants in UTC and local time |
 | `GET /ledger` | | every journal entry |
 | `GET /report` | | everything: JSON, or plain text with `Accept: text/plain` |
@@ -57,6 +57,10 @@ State is kept in SQLite (`recon.sqlite` in the working directory), so a restart 
 | `GET /deposits/:txHash` | | one deposit: what came in, every webhook that converted it, what they credited, and its breaks |
 
 The `GET`s take an optional `?cutoff=<ISO-8601 with offset>` (encode `+` as `%2B`). The default is `RECON_CUTOFF`.
+
+Every `GET` also says which data it was computed from and, where it matters, how firm it is:
+- `version` is the number of deliveries stored. It grows with each new delivery and does not move when the same data is sent again, so a caller can tell whether its copy is up to date. The same `version` and `cutoff` always give the same answer.
+- `status` (in `/balances`, `/breaks` and `/report`) is `RECONCILED` when there is nothing to review and `NEEDS_REVIEW` when there is at least one break or review item. Informational findings do not count. `/breaks` and `/report` add the count of each severity.
 
 Errors: `422` with the offending lines when any record of an ingest request is invalid (**nothing is stored**, fix the file and send it again); `400` for JSON that does not parse, a bad `cutoff` or an unknown `state`; `404` for a pay-out or a deposit with nothing known by the cutoff; `415` when a CSV feed is not sent as `text/csv`.
 
@@ -83,6 +87,7 @@ curl -H 'Accept: text/plain' localhost:3000/report
 | Bs available at the provider | 12,120.95 |
 | Bs paid out | 129,505.55 |
 | Bs in pay-outs not final | 3,900.00 |
+| of the Bs paid out, with an incomplete history | 0.00 |
 
 Breaks: `fw_003` spread 1.20% · `fw_004` webhook 145 min late · 1,500 USDT deposit without webhook · pay-out `P018` stuck 49 min · Bs balance negative 16:26–17:10 (max shortfall 2,480.55) · `P005` reversed (review) · info: `pe_0029` delivered twice, `P009` preview never confirmed.
 
