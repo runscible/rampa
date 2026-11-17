@@ -180,6 +180,17 @@ describe('ingestion breaks', () => {
   });
 });
 
+describe('ingestion breaks and the cutoff', () => {
+  it('a duplicate or conflict that happens after the cutoff is not part of the report', () => {
+    const [e] = lifecycle('P1', 100, ['20:10', '20:11']);
+    const r = run({ payoutEvents: [e, e, ev('P1-CONFIRM', 'P1', 'CONFIRM', 1, '20:11'), ev('P1-CONFIRM', 'P1', 'CONFIRM', 2, '20:11')] });
+    expect(breaksOf(r, 'DUPLICATE_DELIVERY')).toEqual([]);
+    expect(breaksOf(r, 'EVENT_CONFLICT')).toEqual([]);
+    expect(r.ingestion.duplicateIds).toEqual([]);
+    expect(r.ingestion.conflictingIds).toEqual([]);
+  });
+});
+
 describe('break: NEGATIVE_BALANCE', () => {
   const funded = fw('fw_1', '0x1', 1000, '10', 10000, '09:00');
   const refill = fw('fw_2', '0x2', 500, '10', 5000, '11:00');

@@ -79,12 +79,14 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
   const ledger = [...depositEntries, ...fundingEntries, ...payoutEntries].sort((a, b) => a.at.getTime() - b.at.getTime());
   assertBalanced(ledger);
 
-  const repeated = (kind: 'duplicates' | 'conflicts'): RepeatedId[] => [
-    ...deposits[kind].map((d) => ({ id: d.txHash, at: d.at })),
-    ...funding[kind].map((e) => ({ id: e.eventId, at: e.at })),
-    ...payouts[kind].map((e) => ({ id: e.eventId, at: e.at })),
-    ...rates[kind].map((r) => ({ id: r.at.toISOString(), at: r.at })),
-  ];
+  // Repeats are part of the report only if they happened by the cutoff, like everything else.
+  const repeated = (kind: 'duplicates' | 'conflicts'): RepeatedId[] =>
+    [
+      ...deposits[kind].map((d) => ({ id: d.txHash, at: d.at })),
+      ...funding[kind].map((e) => ({ id: e.eventId, at: e.at })),
+      ...payouts[kind].map((e) => ({ id: e.eventId, at: e.at })),
+      ...rates[kind].map((r) => ({ id: r.at.toISOString(), at: r.at })),
+    ].filter(upToCutoff);
 
   const accounts = accountBalances(ledger);
   return {
