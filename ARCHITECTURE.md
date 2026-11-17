@@ -19,7 +19,8 @@ src/
   adapters/sqlite/ SQLite delivery repository (the one the server uses)
   adapters/report/ text and JSON renderers (pure functions of the result)
   config/, app.module.ts, main.ts   composition root (wires ports to implementations)
-test/{domain,application,adapters}/, test/architecture.spec.ts
+scripts/run-output.ts   client of the API: sends the provided files and saves the report to out/
+test/{domain,application,adapters,http,scripts}/, test/architecture.spec.ts
 ```
 
 ## Decisions

@@ -1,0 +1,523 @@
+{
+  "asOf": "2026-10-05T20:00:00-04:00",
+  "timeZone": "America/La_Paz",
+  "balances": {
+    "usdtUnconverted": "1500.00",
+    "usdtConverted": "14500.00",
+    "bsFunded": "141626.50",
+    "bsAvailable": "12120.95",
+    "bsPaidOut": "129505.55",
+    "bsInFlight": "3900.00"
+  },
+  "breaks": [
+    {
+      "id": "SPREAD_EXCEEDED:fw_003",
+      "type": "SPREAD_EXCEEDED",
+      "severity": "BREAK",
+      "subject": "fw_003",
+      "reason": "Spread 1.20% exceeds 0.50% (provider rate 9.7168, reference 9.8348)",
+      "at": "2026-10-05T16:36:00.000Z",
+      "atLocal": "2026-10-05T12:36:00-04:00"
+    },
+    {
+      "id": "NEGATIVE_BALANCE:2026-10-05T20:26:00.000Z",
+      "type": "NEGATIVE_BALANCE",
+      "severity": "BREAK",
+      "subject": "BS_PROVIDER_BALANCE",
+      "reason": "Provider Bs balance below zero; maximum shortfall 2480.55 Bs",
+      "at": "2026-10-05T20:26:00.000Z",
+      "atLocal": "2026-10-05T16:26:00-04:00",
+      "until": "2026-10-05T21:10:00.000Z",
+      "untilLocal": "2026-10-05T17:10:00-04:00"
+    },
+    {
+      "id": "LATE_FUNDING_WEBHOOK:fw_004",
+      "type": "LATE_FUNDING_WEBHOOK",
+      "severity": "BREAK",
+      "subject": "fw_004",
+      "reason": "Webhook arrived 145 min after the deposit (limit 10 min)",
+      "at": "2026-10-05T21:10:00.000Z",
+      "atLocal": "2026-10-05T17:10:00-04:00"
+    },
+    {
+      "id": "DEPOSIT_WITHOUT_WEBHOOK:0x12a750139ca2e4c14287bb6ed9ece9ee75b556a911f19f91c2f0d59ef40e7597",
+      "type": "DEPOSIT_WITHOUT_WEBHOOK",
+      "severity": "BREAK",
+      "subject": "0x12a750139ca2e4c14287bb6ed9ece9ee75b556a911f19f91c2f0d59ef40e7597",
+      "reason": "1500.00 USDT deposited 140 min before the cutoff and no funding webhook yet (limit 10 min)",
+      "at": "2026-10-05T21:40:00.000Z",
+      "atLocal": "2026-10-05T17:40:00-04:00"
+    },
+    {
+      "id": "STUCK_PAYOUT:P018",
+      "type": "STUCK_PAYOUT",
+      "severity": "BREAK",
+      "subject": "P018",
+      "reason": "Confirmed 49 min before the cutoff with no terminal event (limit 15 min)",
+      "at": "2026-10-05T23:11:00.000Z",
+      "atLocal": "2026-10-05T19:11:00-04:00"
+    },
+    {
+      "id": "PAYOUT_REVERSED:P005",
+      "type": "PAYOUT_REVERSED",
+      "severity": "REVIEW",
+      "subject": "P005",
+      "reason": "Completed pay-out reversed (3100.00 Bs returned to the balance)",
+      "at": "2026-10-05T22:30:00.000Z",
+      "atLocal": "2026-10-05T18:30:00-04:00"
+    },
+    {
+      "id": "UNCONFIRMED_PREVIEW:P009",
+      "type": "UNCONFIRMED_PREVIEW",
+      "severity": "INFO",
+      "subject": "P009",
+      "reason": "Previewed 2750.25 Bs and never confirmed (no financial effect)",
+      "at": "2026-10-05T16:50:00.000Z",
+      "atLocal": "2026-10-05T12:50:00-04:00"
+    },
+    {
+      "id": "DUPLICATE_DELIVERY:pe_0029",
+      "type": "DUPLICATE_DELIVERY",
+      "severity": "INFO",
+      "subject": "pe_0029",
+      "reason": "Delivered more than once with identical content; the repeat was ignored",
+      "at": "2026-10-05T17:11:00.000Z",
+      "atLocal": "2026-10-05T13:11:00-04:00"
+    }
+  ],
+  "ingestion": {
+    "duplicateIds": [
+      "pe_0029"
+    ],
+    "conflictingIds": [],
+    "irregularPayoutEvents": [],
+    "rejectedPayoutEvents": []
+  },
+  "parseErrors": [],
+  "ledger": [
+    {
+      "id": "deposit:0x33a123e5d474e8f3495a7c304f17184276715204ccb2887317f37bcb216b4681",
+      "at": "2026-10-05T12:10:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "5000.00"
+        },
+        {
+          "account": "PARTNER_PREFUND",
+          "currency": "USDT",
+          "amount": "-5000.00"
+        }
+      ]
+    },
+    {
+      "id": "funding:fw_001",
+      "at": "2026-10-05T12:18:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_CONVERTED",
+          "currency": "USDT",
+          "amount": "5000.00"
+        },
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "-5000.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "48972.50"
+        },
+        {
+          "account": "FX_CLEARING",
+          "currency": "BS",
+          "amount": "-48972.50"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0003",
+      "at": "2026-10-05T12:46:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "6200.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-6200.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0006",
+      "at": "2026-10-05T13:11:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "9800.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-9800.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0009",
+      "at": "2026-10-05T13:46:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "4350.50"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-4350.50"
+        }
+      ]
+    },
+    {
+      "id": "deposit:0x2265f5336d7b6037b5b75ace727a6c482c37ae963dad3bd8eff402314e8548ab",
+      "at": "2026-10-05T14:05:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "3000.00"
+        },
+        {
+          "account": "PARTNER_PREFUND",
+          "currency": "USDT",
+          "amount": "-3000.00"
+        }
+      ]
+    },
+    {
+      "id": "funding:fw_002",
+      "at": "2026-10-05T14:12:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_CONVERTED",
+          "currency": "USDT",
+          "amount": "3000.00"
+        },
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "-3000.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "29385.30"
+        },
+        {
+          "account": "FX_CLEARING",
+          "currency": "BS",
+          "amount": "-29385.30"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0012",
+      "at": "2026-10-05T14:36:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "12000.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-12000.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0015",
+      "at": "2026-10-05T15:06:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "3100.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-3100.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0019",
+      "at": "2026-10-05T15:26:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "7450.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-7450.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0025",
+      "at": "2026-10-05T16:16:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "8900.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-8900.00"
+        }
+      ]
+    },
+    {
+      "id": "deposit:0xbed7abeac56e560a96b7fef4c846a691fe3deb2e4d1e5bbf1085b8d9e2c6e934",
+      "at": "2026-10-05T16:30:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "4000.00"
+        },
+        {
+          "account": "PARTNER_PREFUND",
+          "currency": "USDT",
+          "amount": "-4000.00"
+        }
+      ]
+    },
+    {
+      "id": "funding:fw_003",
+      "at": "2026-10-05T16:36:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_CONVERTED",
+          "currency": "USDT",
+          "amount": "4000.00"
+        },
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "-4000.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "38867.20"
+        },
+        {
+          "account": "FX_CLEARING",
+          "currency": "BS",
+          "amount": "-38867.20"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0029",
+      "at": "2026-10-05T17:11:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "11200.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-11200.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0032",
+      "at": "2026-10-05T17:46:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "9990.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-9990.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0035",
+      "at": "2026-10-05T18:21:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "6400.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-6400.00"
+        }
+      ]
+    },
+    {
+      "id": "deposit:0x080f626098377e96e40b2ff0260738034149998b08e5c086b940ae567580c32c",
+      "at": "2026-10-05T18:45:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "2500.00"
+        },
+        {
+          "account": "PARTNER_PREFUND",
+          "currency": "USDT",
+          "amount": "-2500.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0038",
+      "at": "2026-10-05T19:06:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "8800.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-8800.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0041",
+      "at": "2026-10-05T20:26:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "31515.05"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-31515.05"
+        }
+      ]
+    },
+    {
+      "id": "funding:fw_004",
+      "at": "2026-10-05T21:10:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_CONVERTED",
+          "currency": "USDT",
+          "amount": "2500.00"
+        },
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "-2500.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "24401.50"
+        },
+        {
+          "account": "FX_CLEARING",
+          "currency": "BS",
+          "amount": "-24401.50"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0044",
+      "at": "2026-10-05T21:36:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "5600.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-5600.00"
+        }
+      ]
+    },
+    {
+      "id": "deposit:0x12a750139ca2e4c14287bb6ed9ece9ee75b556a911f19f91c2f0d59ef40e7597",
+      "at": "2026-10-05T21:40:00.000Z",
+      "lines": [
+        {
+          "account": "USDT_WALLET_PENDING",
+          "currency": "USDT",
+          "amount": "1500.00"
+        },
+        {
+          "account": "PARTNER_PREFUND",
+          "currency": "USDT",
+          "amount": "-1500.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0016",
+      "at": "2026-10-05T22:30:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "-3100.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "3100.00"
+        }
+      ]
+    },
+    {
+      "id": "payout:pe_0050",
+      "at": "2026-10-05T22:56:00.000Z",
+      "lines": [
+        {
+          "account": "BS_PAID_OUT",
+          "currency": "BS",
+          "amount": "7300.00"
+        },
+        {
+          "account": "BS_PROVIDER_BALANCE",
+          "currency": "BS",
+          "amount": "-7300.00"
+        }
+      ]
+    }
+  ]
+}

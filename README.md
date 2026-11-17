@@ -10,6 +10,7 @@ Design notes for contributors are in [`ARCHITECTURE.md`](ARCHITECTURE.md); the a
 npm install
 npm start          # http://localhost:3000  (PORT to change it)
 npm test           # unit + e2e tests
+npm run output     # regenerate out/ (see below)
 ```
 
 State is kept in SQLite (`recon.sqlite` in the working directory), so a restart keeps everything. Delete the file to start from scratch.
@@ -48,6 +49,10 @@ curl -X POST localhost:3000/ingest/payout-events    -H 'Content-Type: applicatio
 curl localhost:3000/balances
 curl -H 'Accept: text/plain' localhost:3000/report
 ```
+
+## Output of a run
+
+[`out/run-output.txt`](out/run-output.txt) (readable) and [`out/run-output.json`](out/run-output.json) (machine-readable) are what the service answers for the four provided files. `npm run output` produces them through the API itself: it starts the service with a throwaway database, sends the files with `POST /ingest/*` and saves `GET /report`. A test fails if `out/` is out of date, so it always matches the code.
 
 ## Results with the provided data (cutoff 20:00, La Paz)
 

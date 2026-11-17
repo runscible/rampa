@@ -1,0 +1,39 @@
+RAMPA RECONCILIATION REPORT
+As of 2026-10-05T20:00:00-04:00 (America/La_Paz)
+
+BALANCES
+  USDT sent, not yet converted             1,500.00 USDT
+  USDT converted                          14,500.00 USDT
+  Bs funded                                141,626.50 Bs
+  Bs available at provider                  12,120.95 Bs
+  Bs paid out                              129,505.55 Bs
+  Bs in pay-outs not final                   3,900.00 Bs
+
+BREAKS (5 breaks, 1 review, 2 info)
+  BREAK   2026-10-05 12:36:00  SPREAD_EXCEEDED           fw_003
+    Spread 1.20% exceeds 0.50% (provider rate 9.7168, reference 9.8348)
+  BREAK   2026-10-05 16:26:00  NEGATIVE_BALANCE          BS_PROVIDER_BALANCE
+    [2026-10-05 16:26:00 -> 2026-10-05 17:10:00] Provider Bs balance below zero; maximum shortfall 2480.55 Bs
+  BREAK   2026-10-05 17:10:00  LATE_FUNDING_WEBHOOK      fw_004
+    Webhook arrived 145 min after the deposit (limit 10 min)
+  BREAK   2026-10-05 17:40:00  DEPOSIT_WITHOUT_WEBHOOK   0x12a750139ca2e4c14287bb6ed9ece9ee75b556a911f19f91c2f0d59ef40e7597
+    1500.00 USDT deposited 140 min before the cutoff and no funding webhook yet (limit 10 min)
+  BREAK   2026-10-05 19:11:00  STUCK_PAYOUT              P018
+    Confirmed 49 min before the cutoff with no terminal event (limit 15 min)
+  REVIEW  2026-10-05 18:30:00  PAYOUT_REVERSED           P005
+    Completed pay-out reversed (3100.00 Bs returned to the balance)
+  INFO    2026-10-05 12:50:00  UNCONFIRMED_PREVIEW       P009
+    Previewed 2750.25 Bs and never confirmed (no financial effect)
+  INFO    2026-10-05 13:11:00  DUPLICATE_DELIVERY        pe_0029
+    Delivered more than once with identical content; the repeat was ignored
+
+LEDGER ACCOUNTS (debit +, credit -)
+  USDT_WALLET_PENDING                1,500.00 USDT
+  USDT_CONVERTED                    14,500.00 USDT
+  PARTNER_PREFUND                  -16,000.00 USDT
+  BS_PROVIDER_BALANCE                 12,120.95 Bs
+  BS_PAID_OUT                        129,505.55 Bs
+  FX_CLEARING                       -141,626.50 Bs
+  Ledger balanced: yes (24 entries)
+
+INPUT PROBLEMS (none)
