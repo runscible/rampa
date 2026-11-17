@@ -73,10 +73,10 @@ describe('reconcile with payout lifecycle', () => {
     expect(r.ingestion.rejectedPayoutEvents.map((x) => x.event.eventId)).toEqual(['other-id']);
   });
 
-  it('a COMPLETED without CONFIRM is still debited (money moved) and reported as irregular', () => {
+  it('a COMPLETED without CONFIRM is still debited (money moved) and its chain is reported as incomplete', () => {
     const r = run([ev('pe_1', 'P1', 'PREVIEW', 2500, '09:00'), ev('pe_2', 'P1', 'COMPLETED', 2500, '09:05')]);
     expect(r.balances.bsPaidOut.toString()).toBe('2500.00');
-    expect(r.ingestion.irregularPayoutEvents.map((x) => x.event.eventId)).toEqual(['pe_2']);
+    expect(r.breaks.filter((b) => b.type === 'INCOMPLETE_PAYOUT_CHAIN').map((b) => b.subject)).toEqual(['P1']);
     expect(r.ingestion.rejectedPayoutEvents).toEqual([]);
   });
 

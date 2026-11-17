@@ -193,9 +193,44 @@ describe('payout lifecycle breaks', () => {
     expect(breaksOf(r, 'ILLEGAL_TRANSITION')).toEqual([expect.objectContaining({ subject: 'again', severity: 'BREAK' })]);
   });
 
-  it('IRREGULAR_PAYOUT_EVENT: COMPLETED without CONFIRM is applied but needs review', () => {
+  it('INCOMPLETE_PAYOUT_CHAIN: a COMPLETED without CONFIRM is applied, and the missing step is named', () => {
     const r = run({ payoutEvents: [ev('a', 'P1', 'PREVIEW', 100, '09:00'), ev('b', 'P1', 'COMPLETED', 100, '09:05')] });
-    expect(breaksOf(r, 'IRREGULAR_PAYOUT_EVENT')).toEqual([expect.objectContaining({ subject: 'b', severity: 'REVIEW' })]);
+    const [b] = breaksOf(r, 'INCOMPLETE_PAYOUT_CHAIN');
+    expect(b).toMatchObject({ id: 'INCOMPLETE_PAYOUT_CHAIN:P1', severity: 'REVIEW', subject: 'P1' });
+    expect(b.reason).toContain('COMPLETED');
+    expect(b.reason).toContain('CONFIRM');
+    expect(r.balances.bsPaidOut.toString()).toBe('100.00');
+  });
+
+  it('INCOMPLETE_PAYOUT_CHAIN lists every step that is missing, not only the previous one', () => {
+    const r = run({ payoutEvents: [ev('b', 'P1', 'COMPLETED', 100, '09:05')] });
+    expect(breaksOf(r, 'INCOMPLETE_PAYOUT_CHAIN')[0].reason).toContain('PREVIEW and CONFIRM');
+    expect(r.balances.bsPaidOut.toString()).toBe('100.00');
+  });
+
+  it('a confirmed pay-out whose PREVIEW never arrived still counts as in flight and can be stuck', () => {
+    const r = run({ payoutEvents: [ev('c', 'P1', 'CONFIRM', 300, '19:00')] });
+    expect(r.balances.bsInFlight.toString()).toBe('300.00');
+    expect(breaksOf(r, 'STUCK_PAYOUT')).toHaveLength(1);
+    expect(breaksOf(r, 'INCOMPLETE_PAYOUT_CHAIN')[0].reason).toContain('PREVIEW');
+    expect(breaksOf(r, 'ILLEGAL_TRANSITION')).toEqual([]);
+  });
+
+  it('a pay-out that failed without a CONFIRM is a failure with a gap, not an unconfirmed preview', () => {
+    const r = run({ payoutEvents: [ev('p', 'P1', 'PREVIEW', 100, '09:00'), ev('f', 'P1', 'FAILED', 100, '09:05')] });
+    expect(breaksOf(r, 'UNCONFIRMED_PREVIEW')).toEqual([]);
+    expect(breaksOf(r, 'ILLEGAL_TRANSITION')).toEqual([]);
+    expect(breaksOf(r, 'INCOMPLETE_PAYOUT_CHAIN')[0].reason).toContain('CONFIRM');
+  });
+
+  it('a complete chain reports nothing', () => {
+    const r = run({ payoutEvents: lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05']) });
+    expect(breaksOf(r, 'INCOMPLETE_PAYOUT_CHAIN')).toEqual([]);
+  });
+
+  it('IRREGULAR_PAYOUT_EVENT: a REVERSED for a different amount is applied but needs review', () => {
+    const r = run({ payoutEvents: [...lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05']), ev('rev', 'P1', 'REVERSED', 60, '10:00')] });
+    expect(breaksOf(r, 'IRREGULAR_PAYOUT_EVENT')).toEqual([expect.objectContaining({ subject: 'rev', severity: 'REVIEW' })]);
   });
 
   it('UNCONFIRMED_PREVIEW is INFO, and a confirmed preview is not reported', () => {

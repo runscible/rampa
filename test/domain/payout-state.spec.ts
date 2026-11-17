@@ -10,6 +10,10 @@ describe('nextState', () => {
     ['COMPLETED', 'REVERSED', 'REVERSED'],
     ['PREVIEWED', 'COMPLETED', 'COMPLETED'],
     [undefined, 'COMPLETED', 'COMPLETED'],
+    // no money moves at these steps, so a gap before them does not stop the history from being recorded
+    [undefined, 'CONFIRM', 'CONFIRMED'],
+    [undefined, 'FAILED', 'FAILED'],
+    ['PREVIEWED', 'FAILED', 'FAILED'],
   ] as const)('%s + %s -> %s', (from, type, to) => {
     expect(nextState(from, type)).toBe(to);
   });
@@ -19,7 +23,12 @@ describe('nextState', () => {
     ['FAILED', 'COMPLETED'],
     ['CONFIRMED', 'REVERSED'],
     ['REVERSED', 'REVERSED'],
-    [undefined, 'CONFIRM'],
+    // a reversal gives money back, so it needs the completion it undoes
+    [undefined, 'REVERSED'],
+    ['PREVIEWED', 'REVERSED'],
+    ['COMPLETED', 'CONFIRM'],
+    ['COMPLETED', 'FAILED'],
+    ['CONFIRMED', 'PREVIEW'],
   ] as const)('%s + %s is illegal', (from, type) => {
     expect(nextState(from, type)).toBeUndefined();
   });
@@ -68,17 +77,59 @@ describe('replayPayouts', () => {
     expect(r.payouts[0].state).toBe('CONFIRMED');
   });
 
-  it('accepts a COMPLETED without CONFIRM (money moved) and flags it as irregular', () => {
+  it('accepts a COMPLETED without CONFIRM (money moved) and reports the chain as incomplete', () => {
     const r = replayPayouts([ev('P1', 'PREVIEW', '09:00:00'), ev('P1', 'COMPLETED', '09:05:00', 100, 'done')]);
     expect(r.rejected).toEqual([]);
     expect(r.accepted.map((e) => e.eventId)).toContain('done');
-    expect(r.irregular).toEqual([expect.objectContaining({ event: expect.objectContaining({ eventId: 'done' }), reason: expect.stringMatching(/CONFIRM/) })]);
     expect(r.payouts[0].state).toBe('COMPLETED');
+    expect(r.incomplete).toEqual([expect.objectContaining({ payoutId: 'P1', state: 'COMPLETED', missing: ['CONFIRM'] })]);
+    expect(r.irregular).toEqual([]);
   });
 
-  it('does not flag a regular lifecycle', () => {
+  describe('chain completeness: every step the final state implies must have been received', () => {
+    const chain = (...types: string[]) => replayPayouts(types.map((type, i) => ev('P1', type, `09:0${i}:00`)));
+
+    it.each([
+      [['PREVIEW'], 'PREVIEWED', []],
+      [['PREVIEW', 'CONFIRM'], 'CONFIRMED', []],
+      [['PREVIEW', 'CONFIRM', 'COMPLETED'], 'COMPLETED', []],
+      [['PREVIEW', 'CONFIRM', 'FAILED'], 'FAILED', []],
+      [['PREVIEW', 'CONFIRM', 'COMPLETED', 'REVERSED'], 'REVERSED', []],
+      [['CONFIRM'], 'CONFIRMED', ['PREVIEW']],
+      [['CONFIRM', 'COMPLETED'], 'COMPLETED', ['PREVIEW']],
+      [['PREVIEW', 'FAILED'], 'FAILED', ['CONFIRM']],
+      [['COMPLETED'], 'COMPLETED', ['PREVIEW', 'CONFIRM']],
+      [['FAILED'], 'FAILED', ['PREVIEW', 'CONFIRM']],
+      [['PREVIEW', 'COMPLETED', 'REVERSED'], 'REVERSED', ['CONFIRM']],
+    ] as const)('%j ends %s and lacks %j', (types, state, missing) => {
+      const r = chain(...types);
+      expect(r.rejected).toEqual([]);
+      expect(r.payouts[0].state).toBe(state);
+      expect(r.incomplete.map((i) => i.missing)).toEqual(missing.length === 0 ? [] : [missing]);
+    });
+
+    it('a step that arrived out of order still counts as received: the order problem is reported separately', () => {
+      const r = replayPayouts([ev('P1', 'CONFIRM', '09:00:00'), ev('P1', 'PREVIEW', '09:01:00')]);
+      expect(r.rejected).toHaveLength(1);
+      expect(r.payouts[0].state).toBe('CONFIRMED');
+      expect(r.incomplete).toEqual([]);
+    });
+
+    it('a CONFIRM whose PREVIEW never arrived keeps its confirmation instant, so it can be timed', () => {
+      const [p] = chain('CONFIRM').payouts;
+      expect(p.confirmedAt?.toISOString()).toBe('2026-10-05T13:00:00.000Z');
+    });
+
+    it('each pay-out is judged on its own', () => {
+      const r = replayPayouts([ev('P1', 'PREVIEW', '09:00:00'), ev('P1', 'CONFIRM', '09:01:00'), ev('P2', 'CONFIRM', '09:02:00')]);
+      expect(r.incomplete.map((i) => [i.payoutId, i.missing])).toEqual([['P2', ['PREVIEW']]]);
+    });
+  });
+
+  it('does not report a regular lifecycle', () => {
     const r = replayPayouts([ev('P1', 'PREVIEW', '09:00:00'), ev('P1', 'CONFIRM', '09:01:00'), ev('P1', 'COMPLETED', '09:05:00')]);
     expect(r.irregular).toEqual([]);
+    expect(r.incomplete).toEqual([]);
   });
 
   it('keeps the PREVIEW amount and the CONFIRM instant for later checks', () => {

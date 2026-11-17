@@ -113,6 +113,7 @@ Every entry sums to zero in each currency; each account holds one currency. Debi
 - **A repeat inside one request is kept and reported** (INFO `DUPLICATE_DELIVERY`, e.g. `pe_0029`). A repeat with different content is a `EVENT_CONFLICT` break and the first delivery wins.
 - **Order does not matter.** Feeds can arrive in any order and events in any order within a feed. Pay-out events are replayed sorted by instant, then lifecycle step (PREVIEW < CONFIRM < COMPLETED < FAILED < REVERSED), then event id. At the same instant, deposits are applied before fundings, and fundings before pay-outs.
 - **Pay-outs follow a state machine:** PREVIEW → CONFIRM → COMPLETED | FAILED, and COMPLETED → REVERSED. An event that makes no sense (a second COMPLETED with another id, REVERSED without COMPLETED) is rejected and reported, so a pay-out is never debited twice.
+- **A pay-out must show every step its state implies.** COMPLETED implies PREVIEW and CONFIRM, FAILED the same, REVERSED also COMPLETED. A step that was never received is a gap in the history (`INCOMPLETE_PAYOUT_CHAIN`, listing all of them, not just the previous one). Steps that move no money (CONFIRM, FAILED) are recorded even when an earlier one is missing, so the pay-out is still counted and timed; what would invent money (a REVERSED with nothing completed) is never applied.
 
 ## What counts as a break
 
@@ -132,7 +133,8 @@ Every entry sums to zero in each currency; each account holds one currency. Debi
 | BREAK | `NEGATIVE_BALANCE` | Bs balance at the provider below zero; one break per interval with the maximum shortfall |
 | BREAK | `EVENT_CONFLICT` | Same id delivered again with different content |
 | REVIEW | `PAYOUT_REVERSED` | A completed pay-out was reversed |
-| REVIEW | `IRREGULAR_PAYOUT_EVENT` | Applied, but a step was skipped (COMPLETED without CONFIRM) or a REVERSED amount differs from the COMPLETED one |
+| REVIEW | `INCOMPLETE_PAYOUT_CHAIN` | A pay-out reached a state whose earlier steps were never received (e.g. COMPLETED with no CONFIRM). One break per pay-out naming every missing step. If money moved it is applied to the ledger |
+| REVIEW | `IRREGULAR_PAYOUT_EVENT` | A REVERSED whose amount differs from the COMPLETED one (applied with the provider's amount) |
 | REVIEW | `MISSING_REFERENCE_RATE` | No rate at or before the webhook: the spread cannot be checked |
 | INFO | `DUPLICATE_DELIVERY` | Same id and content twice in one request |
 | INFO | `UNCONFIRMED_PREVIEW` | PREVIEW never confirmed (no financial effect) |
@@ -144,7 +146,7 @@ Limits are inclusive (a delay of exactly 10 minutes is not a break).
 - **The ledger records the Bs the webhook says it credited** (`amount_bs`). If that does not match `amount_usdt × rate`, it is a break; the entry is not corrected.
 - **A negative Bs balance can happen.** The provider debits at COMPLETED and reserves nothing, so a pay-out can complete without funds. The ledger records it as is and it shows up as a break.
 - **Spread** is `(reference − provider rate) / reference`. A rate better than the reference is not a break.
-- **COMPLETED without CONFIRM is applied.** The money moved, so hiding it would overstate the balance; it is flagged for review instead. The same goes for a REVERSED with a different amount: the provider's amount is used and flagged.
+- **A COMPLETED with an incomplete history is applied.** The provider debits when it completes, whatever steps we did or did not receive, so leaving it out would overstate the available balance. The gap is reported for review instead. The same goes for a REVERSED with a different amount: the provider's amount is used and flagged. We do not roll back our books on our own: the provider is the one that executes, and a correction belongs to whoever reviews it.
 - **A webhook that arrives after the cutoff does not count** for a deposit "without webhook": the report is as of the cutoff.
 - **Timestamps must carry an explicit offset**; one without it is ambiguous and is rejected. Amounts have at most 2 decimals and rates at most 6; extra decimals are rejected, not rounded.
 - **Everything after the cutoff is ignored**, including repeats.

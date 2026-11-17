@@ -6,19 +6,30 @@ export type PayoutState = 'PREVIEWED' | 'CONFIRMED' | 'COMPLETED' | 'FAILED' | '
 
 type Current = PayoutState | 'NONE';
 
-/** Legal transitions: event type -> (current state -> next state). Anything absent is illegal. */
+/**
+ * Legal transitions: event type -> (current state -> next state). Anything absent is illegal.
+ *
+ * A step that was lost does not stop the history from being recorded when it moves no money (CONFIRM, FAILED), and
+ * COMPLETED is applied even without its predecessors because it means the provider already debited the balance.
+ * What stays illegal is whatever would invent money (a REVERSED with nothing completed to undo) or contradict a
+ * final state. The gaps themselves are reported by `incomplete`.
+ */
 const TRANSITIONS: Record<PayoutEventType, Partial<Record<Current, PayoutState>>> = {
   PREVIEW: { NONE: 'PREVIEWED' },
-  CONFIRM: { PREVIEWED: 'CONFIRMED' },
-  // Lenient on purpose: COMPLETED means the provider already debited the balance, so it is applied
-  // even if CONFIRM was lost, and reported as irregular instead of hiding a real movement.
+  CONFIRM: { NONE: 'CONFIRMED', PREVIEWED: 'CONFIRMED' },
   COMPLETED: { NONE: 'COMPLETED', PREVIEWED: 'COMPLETED', CONFIRMED: 'COMPLETED' },
-  FAILED: { CONFIRMED: 'FAILED' },
+  FAILED: { NONE: 'FAILED', PREVIEWED: 'FAILED', CONFIRMED: 'FAILED' },
   REVERSED: { COMPLETED: 'REVERSED' },
 };
 
-/** The predecessor a regular lifecycle has for an event; accepted events from any other state are irregular. */
-const REGULAR_FROM: Partial<Record<PayoutEventType, Current>> = { COMPLETED: 'CONFIRMED' };
+/** Steps a pay-out in each final state must have gone through. If one was never received, the history has a gap. */
+const REQUIRED_STEPS: Record<PayoutState, PayoutEventType[]> = {
+  PREVIEWED: ['PREVIEW'],
+  CONFIRMED: ['PREVIEW', 'CONFIRM'],
+  COMPLETED: ['PREVIEW', 'CONFIRM', 'COMPLETED'],
+  FAILED: ['PREVIEW', 'CONFIRM', 'FAILED'],
+  REVERSED: ['PREVIEW', 'CONFIRM', 'COMPLETED', 'REVERSED'],
+};
 
 /** Next state after an event, or undefined when the transition is illegal. */
 export function nextState(current: PayoutState | undefined, type: PayoutEventType): PayoutState | undefined {
@@ -48,11 +59,22 @@ export interface PayoutSnapshot {
   confirmedAt?: Instant;
 }
 
+/** A pay-out whose final state implies steps that were never received. */
+export interface IncompletePayout {
+  payoutId: string;
+  state: PayoutState;
+  /** Required steps with no event at all, in lifecycle order. */
+  missing: PayoutEventType[];
+  lastEventAt: Instant;
+}
+
 export interface ReplayResult {
   /** Events that made a legal transition, in processing order. Only these may touch the ledger. */
   accepted: PayoutEvent[];
-  /** Accepted events that skipped a regular step (e.g. COMPLETED without CONFIRM): applied, but need review. */
+  /** Accepted events that need review for a reason other than a gap (a REVERSED for a different amount): applied. */
   irregular: FlaggedPayoutEvent[];
+  /** Pay-outs with steps missing from their history. Their money effect, if any, is applied all the same. */
+  incomplete: IncompletePayout[];
   /** Events that arrived in a state where they make no sense (never applied, needs review). */
   rejected: RejectedPayoutEvent[];
   /** Final state of every payout, ordered by payout id. */
@@ -66,27 +88,24 @@ function byLifecycle(a: PayoutEvent, b: PayoutEvent): number {
   return a.at.getTime() - b.at.getTime() || typeRank(a.type) - typeRank(b.type) || a.eventId.localeCompare(b.eventId);
 }
 
-/** Reasons why an accepted event deviates from a regular lifecycle (empty when it is regular). */
+/** Reasons why an accepted event needs review (empty when it is fine). */
 function irregularities(event: PayoutEvent, current: PayoutSnapshot | undefined): string[] {
-  const previousState = current?.state ?? 'NONE';
-  const expectedPrevious = REGULAR_FROM[event.type];
-  const skippedRegularStep = expectedPrevious !== undefined && previousState !== expectedPrevious;
   const reversalAmountDiffers = event.type === 'REVERSED' && current !== undefined && !event.amountBs.equals(current.amountBs);
-
-  const reasons: string[] = [];
-  if (skippedRegularStep) reasons.push(`${event.type} without ${expectedPrevious} (was ${current?.state ?? 'no previous event'})`);
-  if (reversalAmountDiffers) reasons.push(`REVERSED amount ${event.amountBs} differs from COMPLETED amount ${current.amountBs}`);
-  return reasons;
+  return reversalAmountDiffers ? [`REVERSED amount ${event.amountBs} differs from COMPLETED amount ${current.amountBs}`] : [];
 }
 
-/** Replays events through the state machine. Illegal transitions are rejected, so e.g. a payout is never debited twice. */
+/** Replays events through the state machine. Illegal transitions are rejected, so e.g. a payout is never debited twice. Gaps in the history are reported, not hidden. */
 export function replayPayouts(events: PayoutEvent[]): ReplayResult {
   const accepted: PayoutEvent[] = [];
   const rejected: RejectedPayoutEvent[] = [];
   const irregular: FlaggedPayoutEvent[] = [];
   const payouts = new Map<string, PayoutSnapshot>();
+  // Every step received for each pay-out, whether or not it could be applied: a step that came out of order was still
+  // received, and the order problem is reported on its own.
+  const received = new Map<string, Set<PayoutEventType>>();
 
   for (const event of [...events].sort(byLifecycle)) {
+    received.set(event.payoutId, (received.get(event.payoutId) ?? new Set()).add(event.type));
     const current = payouts.get(event.payoutId);
     const next = nextState(current?.state, event.type);
     if (next === undefined) {
@@ -105,7 +124,13 @@ export function replayPayouts(events: PayoutEvent[]): ReplayResult {
     });
   }
 
-  return { accepted, irregular, rejected, payouts: [...payouts.values()].sort((a, b) => a.payoutId.localeCompare(b.payoutId)) };
+  const snapshots = [...payouts.values()].sort((a, b) => a.payoutId.localeCompare(b.payoutId));
+  const incomplete = snapshots.flatMap((p): IncompletePayout[] => {
+    const missing = REQUIRED_STEPS[p.state].filter((step) => !received.get(p.payoutId)?.has(step));
+    return missing.length === 0 ? [] : [{ payoutId: p.payoutId, state: p.state, missing, lastEventAt: p.lastEventAt }];
+  });
+
+  return { accepted, irregular, incomplete, rejected, payouts: snapshots };
 }
 
 /** Bs in pay-outs that were confirmed but have no terminal event yet. A bare PREVIEW is not in flight. */
