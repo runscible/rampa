@@ -14,6 +14,7 @@ src/
     breaks/        break model + rules (what does not reconcile)
   application/     use cases over domain objects (reconcile)
   adapters/files/  CSV/JSON parsers + file → use case facade
+  adapters/report/ text and JSON renderers (pure functions of the result)
   config/, app.module.ts, main.ts   composition root
 test/{domain,application,adapters}/, test/architecture.spec.ts
 ```
@@ -30,4 +31,5 @@ test/{domain,application,adapters}/, test/architecture.spec.ts
 - **Idempotency is a domain rule:** every source is deduplicated by its id (`dedupeById`): first delivery wins, identical repeats are ignored, differing repeats are reported as conflicts.
 - **Payout lifecycle is a state machine** (`payout-state`): events are replayed in a total order (instant, lifecycle step, id), so delivery order never matters. Only accepted events reach the ledger; illegal ones are rejected, and money-moving events that skip a step are applied and flagged as irregular.
 - **Breaks are pure rules over a context.** Each rule is a function `context → Break[]` in a list (`funding-rules`, `payout-rules`, `balance-rules`, `ingestion-rules`); `findBreaks` runs them and orders the report (severity, instant, id) with deterministic ids. A new check = one function in the list. Severity comes from one table.
+- **Reports are pure functions of the result.** No clock, no randomness: two runs over the same files produce identical bytes (`out/run-output.txt` / `.json`, produced through the API), so a rerun can be diffed. Instants are stored in UTC and only converted to the configured zone when rendering.
 - **Ledger order:** entries are sorted by instant only; ties keep source order (deposits, fundings, payouts) via a stable sort.
