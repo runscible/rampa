@@ -11,6 +11,7 @@ src/
     deposits/      deposit entity + invariants
     funding/       funding event entity (provider converts USDT → Bs)
     payouts/       payout event entity + lifecycle state machine
+    breaks/        break model + rules (what does not reconcile)
   application/     use cases over domain objects (reconcile)
   adapters/files/  CSV/JSON parsers + file → use case facade
   config/, app.module.ts, main.ts, cli.ts   composition root
@@ -28,4 +29,5 @@ test/{domain,application,adapters}/, test/architecture.spec.ts
 - **Adding a source:** a domain entity with a `createX` factory (invariants + fingerprint), a posting rule if it moves money, an adapter function `record → domain input` (`parseTable` / `parseJsonRecords`), and wiring in `reconcile`.
 - **Idempotency is a domain rule:** every source is deduplicated by its id (`dedupeById`): first delivery wins, identical repeats are ignored, differing repeats are reported as conflicts.
 - **Payout lifecycle is a state machine** (`payout-state`): events are replayed in a total order (instant, lifecycle step, id), so delivery order never matters. Only accepted events reach the ledger; illegal ones are rejected, and money-moving events that skip a step are applied and flagged as irregular.
+- **Breaks are pure rules over a context.** Each rule is a function `context → Break[]` in a list (`funding-rules`, `payout-rules`, `balance-rules`, `ingestion-rules`); `findBreaks` runs them and orders the report (severity, instant, id) with deterministic ids. A new check = one function in the list. Severity comes from one table.
 - **Ledger order:** entries are sorted by instant only; ties keep source order (deposits, fundings, payouts) via a stable sort.

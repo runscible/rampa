@@ -3,12 +3,14 @@ import { ParseError } from './csv';
 import { parseDeposits } from './parse-deposits';
 import { parseFundingEvents } from './parse-funding';
 import { parsePayoutEvents } from './parse-payouts';
+import { parseRates } from './parse-rates';
 
 /** Source file names, as they appear in parse-error reports. */
 const FILE_NAMES = {
   deposits: 'usdt_deposits.csv',
   fundingWebhooks: 'funding_webhooks.json',
   payoutEvents: 'payout_events.json',
+  referenceRates: 'reference_rates.csv',
 } as const;
 
 /** Raw contents of the source files. */
@@ -19,6 +21,8 @@ export interface FileInput {
   fundingWebhooks?: string;
   /** FILE_NAMES.payoutEvents */
   payoutEvents?: string;
+  /** FILE_NAMES.referenceRates */
+  referenceRates?: string;
 }
 
 export interface SourceParseError extends ParseError {
@@ -36,12 +40,14 @@ export function reconcileFiles(files: FileInput, config: ReconcileConfig): FileR
   const deposits = parseDeposits(files.deposits);
   const funding = parseFundingEvents(files.fundingWebhooks ?? '[]');
   const payouts = parsePayoutEvents(files.payoutEvents ?? '[]');
+  const rates = parseRates(files.referenceRates ?? 'timestamp,usdt_bs');
   return {
-    ...reconcile({ deposits: deposits.records, fundingEvents: funding.records, payoutEvents: payouts.records }, config),
+    ...reconcile({ deposits: deposits.records, fundingEvents: funding.records, payoutEvents: payouts.records, rates: rates.records }, config),
     parseErrors: [
       ...tagged(FILE_NAMES.deposits, deposits.errors),
       ...tagged(FILE_NAMES.fundingWebhooks, funding.errors),
       ...tagged(FILE_NAMES.payoutEvents, payouts.errors),
+      ...tagged(FILE_NAMES.referenceRates, rates.errors),
     ],
   };
 }

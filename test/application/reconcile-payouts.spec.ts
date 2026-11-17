@@ -17,7 +17,7 @@ const lifecycle = (id: string, amount: number, hhmm: [string, string], ...termin
   ev(`${id}-cf`, id, 'CONFIRM', amount, hhmm[1]),
   ...terminal.map(([type, time]) => ev(`${id}-${type}`, id, type, amount, time)),
 ];
-const run = (payoutEvents: PayoutEvent[], cutoff = CONFIG) => reconcile({ deposits: [], fundingEvents, payoutEvents }, cutoff);
+const run = (payoutEvents: PayoutEvent[], cutoff = CONFIG) => reconcile({ deposits: [], fundingEvents, payoutEvents, rates: [] }, cutoff);
 
 describe('reconcile with payout lifecycle', () => {
   it('COMPLETED moves Bs from available to paid out', () => {
@@ -100,7 +100,7 @@ describe('reconcile with payout lifecycle', () => {
   it('orders a funding before a payout at the same instant', () => {
     const sameInstant = createFundingEvent({ eventId: 'fw_9', depositTxHash: '0x9', amountUsdt: 1, rate: 10, amountBs: 10, timestamp: at('10:00') });
     const events = [...lifecycle('P1', 1000, ['09:00', '09:01'], ['COMPLETED', '10:00'])];
-    const r = reconcile({ deposits: [], fundingEvents: [sameInstant], payoutEvents: events }, CONFIG);
+    const r = reconcile({ deposits: [], fundingEvents: [sameInstant], payoutEvents: events, rates: [] }, CONFIG);
     const ids = r.ledger.filter((e) => e.at.getTime() === sameInstant.at.getTime()).map((e) => e.id);
     expect(ids).toEqual(['funding:fw_9', 'payout:P1-COMPLETED']);
   });

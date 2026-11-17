@@ -8,7 +8,7 @@ describe('reconcile (use case, domain objects only)', () => {
   it('sums deposits up to the cutoff, inclusive', () => {
     const result = reconcile(
       {
-        fundingEvents: [], payoutEvents: [],
+        fundingEvents: [], payoutEvents: [], rates: [],
         deposits: [
           deposit('0x1', '100.00', '2026-10-05T20:00:00-04:00'),
           deposit('0x2', '900.00', '2026-10-05T20:00:01-04:00'),
@@ -21,7 +21,7 @@ describe('reconcile (use case, domain objects only)', () => {
 
   it('is idempotent for deposits: the same tx_hash delivered twice is counted once and reported', () => {
     const d = deposit('0x1', '100.00', '2026-10-05T09:00:00-04:00');
-    const r = reconcile({ deposits: [d, d], fundingEvents: [], payoutEvents: [] }, CONFIG);
+    const r = reconcile({ deposits: [d, d], fundingEvents: [], payoutEvents: [], rates: [] }, CONFIG);
     expect(r.balances.usdtUnconverted.toString()).toBe('100.00');
     expect(r.ingestion.duplicateIds).toEqual(['0x1']);
   });
@@ -29,7 +29,7 @@ describe('reconcile (use case, domain objects only)', () => {
   it('a tx_hash repeated with a different amount keeps the first and reports a conflict', () => {
     const first = deposit('0x1', '100.00', '2026-10-05T09:00:00-04:00');
     const other = deposit('0x1', '999.00', '2026-10-05T09:00:00-04:00');
-    const r = reconcile({ deposits: [first, other], fundingEvents: [], payoutEvents: [] }, CONFIG);
+    const r = reconcile({ deposits: [first, other], fundingEvents: [], payoutEvents: [], rates: [] }, CONFIG);
     expect(r.balances.usdtUnconverted.toString()).toBe('100.00');
     expect(r.ingestion.conflictingIds).toEqual(['0x1']);
   });

@@ -66,9 +66,50 @@ describe('reconcileFiles: deposits only (slice 1)', () => {
     expect(() => assertBalanced(result.ledger)).not.toThrow();
   });
 
+  it('real data: the breaks report matches the plan (5 breaks, 1 review, 2 info)', () => {
+    const read = (name: string) => readFileSync(join(__dirname, '..', '..', 'data', name), 'utf8');
+    const result = reconcileFiles(
+      {
+        deposits: read('usdt_deposits.csv'),
+        fundingWebhooks: read('funding_webhooks.json'),
+        payoutEvents: read('payout_events.json'),
+        referenceRates: read('reference_rates.csv'),
+      },
+      CUTOFF,
+    );
+    const summary = result.breaks.map((b) => `${b.severity} ${b.type} ${b.subject}`);
+    expect(summary).toEqual([
+      'BREAK SPREAD_EXCEEDED fw_003',
+      'BREAK NEGATIVE_BALANCE 2026-10-05T20:26:00.000Z',
+      'BREAK LATE_FUNDING_WEBHOOK fw_004',
+      'BREAK DEPOSIT_WITHOUT_WEBHOOK 0x12a750139ca2e4c14287bb6ed9ece9ee75b556a911f19f91c2f0d59ef40e7597',
+      'BREAK STUCK_PAYOUT P018',
+      'REVIEW PAYOUT_REVERSED P005',
+      'INFO UNCONFIRMED_PREVIEW P009',
+      'INFO DUPLICATE_DELIVERY pe_0029',
+    ]);
+    const byType = (type: string) => result.breaks.find((b) => b.type === type)!;
+    expect(byType('SPREAD_EXCEEDED').reason).toContain('1.20%');
+    expect(byType('LATE_FUNDING_WEBHOOK').reason).toContain('145 min');
+    expect(byType('NEGATIVE_BALANCE').reason).toContain('2480.55');
+    expect(byType('NEGATIVE_BALANCE').reason).toContain('2026-10-05T21:10:00.000Z');
+    expect(byType('STUCK_PAYOUT').reason).toContain('49 min');
+  });
+
+  it('is repeatable: running the same files twice gives identical breaks', () => {
+    const read = (name: string) => readFileSync(join(__dirname, '..', '..', 'data', name), 'utf8');
+    const files = { deposits: read('usdt_deposits.csv'), fundingWebhooks: read('funding_webhooks.json'), payoutEvents: read('payout_events.json'), referenceRates: read('reference_rates.csv') };
+    expect(reconcileFiles(files, CUTOFF).breaks).toEqual(reconcileFiles(files, CUTOFF).breaks);
+  });
+
   it('surfaces payout parse errors with the file name', () => {
     const result = reconcileFiles({ deposits: HEADER, payoutEvents: '[{}]' }, CUTOFF);
     expect(result.parseErrors).toEqual([{ file: 'payout_events.json', line: 1, reason: expect.stringContaining('event_id') }]);
+  });
+
+  it('surfaces rate parse errors with the file name', () => {
+    const result = reconcileFiles({ deposits: HEADER, referenceRates: 'timestamp,usdt_bs\n2026-10-05T07:00:00-04:00,abc' }, CUTOFF);
+    expect(result.parseErrors).toEqual([{ file: 'reference_rates.csv', line: 2, reason: expect.stringContaining('abc') }]);
   });
 
   it('surfaces funding webhook parse errors with the file name', () => {

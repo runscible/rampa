@@ -30,11 +30,18 @@ export interface FlaggedPayoutEvent {
   reason: string;
 }
 
+export interface RejectedPayoutEvent extends FlaggedPayoutEvent {
+  /** State the payout was in when the event arrived (undefined: no previous event). */
+  from: PayoutState | undefined;
+}
+
 export interface PayoutSnapshot {
   payoutId: string;
   state: PayoutState;
   /** Amount of the last accepted event. */
   amountBs: Money;
+  /** Instant of the last accepted event. */
+  lastEventAt: Instant;
   /** Amount announced at PREVIEW, kept to compare against the CONFIRM amount. */
   previewAmountBs?: Money;
   /** When the pay-out was confirmed, kept to measure how long it has been waiting for a terminal event. */
@@ -47,7 +54,7 @@ export interface ReplayResult {
   /** Accepted events that skipped a regular step (e.g. COMPLETED without CONFIRM): applied, but need review. */
   irregular: FlaggedPayoutEvent[];
   /** Events that arrived in a state where they make no sense (never applied, needs review). */
-  rejected: FlaggedPayoutEvent[];
+  rejected: RejectedPayoutEvent[];
   /** Final state of every payout, ordered by payout id. */
   payouts: PayoutSnapshot[];
 }
@@ -75,7 +82,7 @@ function irregularities(event: PayoutEvent, current: PayoutSnapshot | undefined)
 /** Replays events through the state machine. Illegal transitions are rejected, so e.g. a payout is never debited twice. */
 export function replayPayouts(events: PayoutEvent[]): ReplayResult {
   const accepted: PayoutEvent[] = [];
-  const rejected: FlaggedPayoutEvent[] = [];
+  const rejected: RejectedPayoutEvent[] = [];
   const irregular: FlaggedPayoutEvent[] = [];
   const payouts = new Map<string, PayoutSnapshot>();
 
@@ -83,7 +90,7 @@ export function replayPayouts(events: PayoutEvent[]): ReplayResult {
     const current = payouts.get(event.payoutId);
     const next = nextState(current?.state, event.type);
     if (next === undefined) {
-      rejected.push({ event, reason: `${event.type} not allowed after ${current?.state ?? 'no previous event'}` });
+      rejected.push({ event, from: current?.state, reason: `${event.type} not allowed after ${current?.state ?? 'no previous event'}` });
       continue;
     }
     for (const reason of irregularities(event, current)) irregular.push({ event, reason });
@@ -92,6 +99,7 @@ export function replayPayouts(events: PayoutEvent[]): ReplayResult {
       payoutId: event.payoutId,
       state: next,
       amountBs: event.amountBs,
+      lastEventAt: event.at,
       previewAmountBs: event.type === 'PREVIEW' ? event.amountBs : current?.previewAmountBs,
       confirmedAt: event.type === 'CONFIRM' ? event.at : current?.confirmedAt,
     });
