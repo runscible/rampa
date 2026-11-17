@@ -107,6 +107,7 @@ Every entry sums to zero in each currency; each account holds one currency. Debi
 | BREAK | `DEPOSIT_WITHOUT_WEBHOOK` | Deposit with no webhook, older than 10 min at the cutoff |
 | BREAK | `UNKNOWN_DEPOSIT` | Webhook for a `tx_hash` that was never deposited |
 | BREAK | `AMOUNT_MISMATCH` | Webhook `amount_usdt` differs from the deposit |
+| BREAK | `AMOUNT_BS_MISMATCH` | Webhook credits a Bs amount that is more than 0.01 Bs away from `amount_usdt × rate` (rounded half up). The ledger keeps the amount the provider says it credited |
 | BREAK | `DOUBLE_FUNDING` | Two different webhooks for one deposit (both are applied) |
 | BREAK | `STUCK_PAYOUT` | CONFIRMED more than 15 min before the cutoff, no terminal event |
 | BREAK | `CONFIRM_AMOUNT_MISMATCH` | CONFIRM amount differs from PREVIEW |
@@ -124,6 +125,7 @@ Limits are inclusive (a delay of exactly 10 minutes is not a break).
 
 ## Assumptions
 
+- **The ledger records the Bs the webhook says it credited** (`amount_bs`). If that does not match `amount_usdt × rate`, it is a break; the entry is not corrected.
 - **A negative Bs balance can happen.** The provider debits at COMPLETED and reserves nothing, so a pay-out can complete without funds. The ledger records it as is and it shows up as a break.
 - **Spread** is `(reference − provider rate) / reference`. A rate better than the reference is not a break.
 - **COMPLETED without CONFIRM is applied.** The money moved, so hiding it would overstate the balance; it is flagged for review instead. The same goes for a REVERSED with a different amount: the provider's amount is used and flagged.

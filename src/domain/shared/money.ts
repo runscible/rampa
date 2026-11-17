@@ -54,6 +54,20 @@ export class Money {
     return new Money(this.currency, this.value.negated());
   }
 
+  /** This amount expressed in another currency at `rate` (units of the other currency per unit of this one), rounded half up to 2 decimals. */
+  convertAt(currency: Currency, rate: D): Money {
+    return new Money(currency, this.value.times(rate).toDecimalPlaces(SCALE, D.ROUND_HALF_UP));
+  }
+
+  abs(): Money {
+    return new Money(this.currency, this.value.abs());
+  }
+
+  isGreaterThan(other: Money): boolean {
+    this.assertSameCurrency(other);
+    return this.value.greaterThan(other.value);
+  }
+
   isNegative(): boolean {
     return this.value.isNegative() && !this.value.isZero();
   }

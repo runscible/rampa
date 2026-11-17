@@ -1,3 +1,4 @@
+import { D } from '../../src/domain/shared/decimal';
 import { Money } from '../../src/domain/shared/money';
 
 describe('Money', () => {
@@ -39,5 +40,32 @@ describe('Money', () => {
   it('compares by currency and amount', () => {
     expect(Money.parse('BS', '1.0').equals(Money.parse('BS', '1.00'))).toBe(true);
     expect(Money.parse('BS', '1').equals(Money.parse('USDT', '1'))).toBe(false);
+  });
+
+  describe('convertAt', () => {
+    const rate = (text: string) => new D(text);
+
+    it('converts to another currency at a rate, with 2 decimals', () => {
+      const bs = Money.parse('USDT', '2500.00').convertAt('BS', rate('9.7606'));
+      expect(bs.currency).toBe('BS');
+      expect(bs.toString()).toBe('24401.50');
+    });
+
+    it('rounds half up to 2 decimals', () => {
+      expect(Money.parse('USDT', '0.01').convertAt('BS', rate('9.9999')).toString()).toBe('0.10');
+      expect(Money.parse('USDT', '100.00').convertAt('BS', rate('9.99995')).toString()).toBe('1000.00');
+    });
+  });
+
+  it('abs() drops the sign', () => {
+    expect(Money.parse('BS', '-2480.55').abs().toString()).toBe('2480.55');
+    expect(Money.parse('BS', '3.00').abs().toString()).toBe('3.00');
+  });
+
+  it('isGreaterThan compares amounts of the same currency', () => {
+    const one = Money.parse('BS', '0.01');
+    expect(Money.parse('BS', '0.02').isGreaterThan(one)).toBe(true);
+    expect(one.isGreaterThan(one)).toBe(false);
+    expect(() => one.isGreaterThan(Money.parse('USDT', '0.01'))).toThrow(/currency/i);
   });
 });

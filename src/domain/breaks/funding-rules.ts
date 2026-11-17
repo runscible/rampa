@@ -1,4 +1,5 @@
 import { D } from '../shared/decimal';
+import { Money } from '../shared/money';
 import { Deposit } from '../deposits/deposit';
 import { Break, createBreak } from './break';
 import { BreakRule, minutesBetween } from './context';
@@ -56,6 +57,23 @@ const amountMismatch: BreakRule = ({ fundingEvents, deposits }) => {
   });
 };
 
+/** Rounding differences up to this many Bs (either way) are not a mismatch. */
+const BS_ROUNDING_TOLERANCE = Money.parse('BS', '0.01');
+
+/**
+ * The Bs a webhook credits has to be what its own rate implies. The spread rule only looks at the rate; this one
+ * looks at the money that actually lands in the balance, so a provider that credits less (or more) than it announced
+ * does not go unnoticed.
+ */
+const amountBsMismatch: BreakRule = ({ fundingEvents }) =>
+  fundingEvents.flatMap((e): Break[] => {
+    const expected = e.amountUsdt.convertAt('BS', e.rate);
+    const difference = e.amountBs.minus(expected).abs();
+    if (!difference.isGreaterThan(BS_ROUNDING_TOLERANCE)) return [];
+    const reason = `Webhook credits ${e.amountBs} Bs but ${e.amountUsdt} USDT at ${e.rate} is ${expected} Bs (difference ${difference})`;
+    return [createBreak('AMOUNT_BS_MISMATCH', e.eventId, reason, e.at)];
+  });
+
 const doubleFunding: BreakRule = ({ fundingEvents }) => {
   const byTx = new Map<string, string[]>();
   for (const e of fundingEvents) byTx.set(e.depositTxHash, [...(byTx.get(e.depositTxHash) ?? []), e.eventId]);
@@ -67,5 +85,5 @@ const doubleFunding: BreakRule = ({ fundingEvents }) => {
     });
 };
 
-export const FUNDING_RULES: BreakRule[] = [spreadExceeded, lateWebhook, depositWithoutWebhook, unknownDeposit, amountMismatch, doubleFunding];
+export const FUNDING_RULES: BreakRule[] = [spreadExceeded, lateWebhook, depositWithoutWebhook, unknownDeposit, amountMismatch, amountBsMismatch, doubleFunding];
 

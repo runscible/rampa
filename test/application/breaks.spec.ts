@@ -104,6 +104,49 @@ describe('funding breaks against the deposit', () => {
   });
 });
 
+describe('break: AMOUNT_BS_MISMATCH', () => {
+  // 1000 USDT at 9.98 is exactly 9980.00 Bs; the reference rate is 10, so the spread (0.2%) is fine.
+  const credited = (amountBs: number) =>
+    run({ rates: REF, deposits: [dep('0x1', '1000.00', '09:00')], fundingEvents: [fw('fw_1', '0x1', 1000, '9.98', amountBs, '09:05')] });
+
+  it('flags a webhook that credits a different amount than its own rate implies, and explains it', () => {
+    const [b] = breaksOf(credited(5000), 'AMOUNT_BS_MISMATCH');
+    expect(b).toMatchObject({ id: 'AMOUNT_BS_MISMATCH:fw_1', severity: 'BREAK', subject: 'fw_1' });
+    expect(b.reason).toContain('5000.00 Bs');
+    expect(b.reason).toContain('9980.00 Bs');
+    expect(b.reason).toContain('4980.00');
+  });
+
+  it('a consistent webhook is fine', () => {
+    expect(breaksOf(credited(9980), 'AMOUNT_BS_MISMATCH')).toEqual([]);
+  });
+
+  it('tolerates a cent of rounding either way, and no more', () => {
+    expect(breaksOf(credited(9980.01), 'AMOUNT_BS_MISMATCH')).toEqual([]);
+    expect(breaksOf(credited(9979.99), 'AMOUNT_BS_MISMATCH')).toEqual([]);
+    expect(breaksOf(credited(9980.02), 'AMOUNT_BS_MISMATCH')).toHaveLength(1);
+    expect(breaksOf(credited(9979.98), 'AMOUNT_BS_MISMATCH')).toHaveLength(1);
+  });
+
+  it('crediting more than the rate implies is a break too', () => {
+    expect(breaksOf(credited(12000), 'AMOUNT_BS_MISMATCH')).toHaveLength(1);
+  });
+
+  it('the ledger still records what the provider says it credited; the break reports the difference', () => {
+    expect(credited(5000).balances.bsFunded.toString()).toBe('5000.00');
+  });
+
+  it('is independent of the spread check: each one reports its own problem', () => {
+    // rate 9.88 is a 1.2% spread; 1000 USDT at 9.88 is 9880 Bs
+    const spreadOnly = run({ rates: REF, fundingEvents: [fw('fw_1', '0x1', 1000, '9.88', 9880, '09:00')] });
+    expect(breaksOf(spreadOnly, 'SPREAD_EXCEEDED')).toHaveLength(1);
+    expect(breaksOf(spreadOnly, 'AMOUNT_BS_MISMATCH')).toEqual([]);
+    const both = run({ rates: REF, fundingEvents: [fw('fw_1', '0x1', 1000, '9.88', 5000, '09:00')] });
+    expect(breaksOf(both, 'SPREAD_EXCEEDED')).toHaveLength(1);
+    expect(breaksOf(both, 'AMOUNT_BS_MISMATCH')).toHaveLength(1);
+  });
+});
+
 describe('break: STUCK_PAYOUT', () => {
   const stuck = (confirmAt: string) => breaksOf(run({ payoutEvents: lifecycle('P1', 1000, ['19:00', confirmAt]) }), 'STUCK_PAYOUT');
 
