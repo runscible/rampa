@@ -6,7 +6,7 @@ import { FundingEvent } from '../domain/funding/funding-event';
 import { accountBalances, assertBalanced, JournalEntry } from '../domain/ledger/ledger';
 import { postDeposit, postFunding, postPayout } from '../domain/ledger/posting';
 import { PayoutEvent } from '../domain/payouts/payout-event';
-import { FlaggedPayoutEvent, RejectedPayoutEvent, replayPayouts, totalInFlight } from '../domain/payouts/payout-state';
+import { RejectedPayoutEvent, replayPayouts, totalInFlight } from '../domain/payouts/payout-state';
 import { RatePoint, RateTable } from '../domain/rates/rate-table';
 import { DedupeResult } from '../domain/shared/dedupe';
 import { Money } from '../domain/shared/money';
@@ -44,8 +44,6 @@ export interface IngestionNotes {
   duplicateIds: string[];
   /** Ids delivered again with different content (first one kept; needs review). */
   conflictingIds: string[];
-  /** Pay-out events applied although a regular step was skipped (e.g. COMPLETED without CONFIRM). */
-  irregularPayoutEvents: FlaggedPayoutEvent[];
   /** Pay-out events that made an illegal state transition (never applied). */
   rejectedPayoutEvents: RejectedPayoutEvent[];
 }
@@ -120,7 +118,6 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
     ingestion: {
       duplicateIds: duplicates.map((r) => r.id),
       conflictingIds: conflicts.map((r) => r.id),
-      irregularPayoutEvents: lifecycle.irregular,
       rejectedPayoutEvents: lifecycle.rejected,
     },
   };

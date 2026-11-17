@@ -127,14 +127,13 @@ Every entry sums to zero in each currency; each account holds one currency. Debi
 | BREAK | `AMOUNT_BS_MISMATCH` | Webhook credits a Bs amount that is more than 0.01 Bs away from `amount_usdt × rate` (rounded half up). The ledger keeps the amount the provider says it credited |
 | BREAK | `DOUBLE_FUNDING` | Two different webhooks for one deposit (both are applied) |
 | BREAK | `STUCK_PAYOUT` | CONFIRMED more than 15 min before the cutoff, no terminal event |
-| BREAK | `CONFIRM_AMOUNT_MISMATCH` | CONFIRM amount differs from PREVIEW |
+| BREAK | `PAYOUT_AMOUNT_MISMATCH` | An event of a pay-out carries a different amount than the previous one received (PREVIEW → CONFIRM → COMPLETED or FAILED → REVERSED). One break per deviation. The ledger uses the amount of the COMPLETED and REVERSED events themselves |
 | BREAK | `REVERSAL_WITHOUT_COMPLETED` | REVERSED for a pay-out that never completed (not applied) |
 | BREAK | `ILLEGAL_TRANSITION` | Any other event that breaks the pay-out lifecycle (not applied) |
 | BREAK | `NEGATIVE_BALANCE` | Bs balance at the provider below zero; one break per interval with the maximum shortfall |
 | BREAK | `EVENT_CONFLICT` | Same id delivered again with different content |
 | REVIEW | `PAYOUT_REVERSED` | A completed pay-out was reversed |
 | REVIEW | `INCOMPLETE_PAYOUT_CHAIN` | A pay-out reached a state whose earlier steps were never received (e.g. COMPLETED with no CONFIRM). One break per pay-out naming every missing step. If money moved it is applied to the ledger |
-| REVIEW | `IRREGULAR_PAYOUT_EVENT` | A REVERSED whose amount differs from the COMPLETED one (applied with the provider's amount) |
 | REVIEW | `MISSING_REFERENCE_RATE` | No rate at or before the webhook: the spread cannot be checked |
 | INFO | `DUPLICATE_DELIVERY` | Same id and content twice in one request |
 | INFO | `UNCONFIRMED_PREVIEW` | PREVIEW never confirmed (no financial effect) |
@@ -146,7 +145,7 @@ Limits are inclusive (a delay of exactly 10 minutes is not a break).
 - **The ledger records the Bs the webhook says it credited** (`amount_bs`). If that does not match `amount_usdt × rate`, it is a break; the entry is not corrected.
 - **A negative Bs balance can happen.** The provider debits at COMPLETED and reserves nothing, so a pay-out can complete without funds. The ledger records it as is and it shows up as a break.
 - **Spread** is `(reference − provider rate) / reference`. A rate better than the reference is not a break.
-- **A COMPLETED with an incomplete history is applied.** The provider debits when it completes, whatever steps we did or did not receive, so leaving it out would overstate the available balance. The gap is reported for review instead. The same goes for a REVERSED with a different amount: the provider's amount is used and flagged. We do not roll back our books on our own: the provider is the one that executes, and a correction belongs to whoever reviews it.
+- **A COMPLETED with an incomplete history is applied.** The provider debits when it completes, whatever steps we did or did not receive, so leaving it out would overstate the available balance. The gap is reported for review instead. A pay-out whose events carry different amounts is applied with the amount of each COMPLETED and REVERSED event, which is what the provider moved, and flagged as a break. We do not roll back our books on our own: the provider is the one that executes, and a correction belongs to whoever reviews it.
 - **A webhook that arrives after the cutoff does not count** for a deposit "without webhook": the report is as of the cutoff.
 - **Timestamps must carry an explicit offset**; one without it is ambiguous and is rejected. Amounts have at most 2 decimals and rates at most 6; extra decimals are rejected, not rounded.
 - **Everything after the cutoff is ignored**, including repeats.

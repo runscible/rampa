@@ -36,12 +36,9 @@ export function nextState(current: PayoutState | undefined, type: PayoutEventTyp
   return TRANSITIONS[type][current ?? 'NONE'];
 }
 
-export interface FlaggedPayoutEvent {
+export interface RejectedPayoutEvent {
   event: PayoutEvent;
   reason: string;
-}
-
-export interface RejectedPayoutEvent extends FlaggedPayoutEvent {
   /** State the payout was in when the event arrived (undefined: no previous event). */
   from: PayoutState | undefined;
 }
@@ -53,8 +50,6 @@ export interface PayoutSnapshot {
   amountBs: Money;
   /** Instant of the last accepted event. */
   lastEventAt: Instant;
-  /** Amount announced at PREVIEW, kept to compare against the CONFIRM amount. */
-  previewAmountBs?: Money;
   /** When the pay-out was confirmed, kept to measure how long it has been waiting for a terminal event. */
   confirmedAt?: Instant;
 }
@@ -71,8 +66,6 @@ export interface IncompletePayout {
 export interface ReplayResult {
   /** Events that made a legal transition, in processing order. Only these may touch the ledger. */
   accepted: PayoutEvent[];
-  /** Accepted events that need review for a reason other than a gap (a REVERSED for a different amount): applied. */
-  irregular: FlaggedPayoutEvent[];
   /** Pay-outs with steps missing from their history. Their money effect, if any, is applied all the same. */
   incomplete: IncompletePayout[];
   /** Events that arrived in a state where they make no sense (never applied, needs review). */
@@ -88,17 +81,10 @@ function byLifecycle(a: PayoutEvent, b: PayoutEvent): number {
   return a.at.getTime() - b.at.getTime() || typeRank(a.type) - typeRank(b.type) || a.eventId.localeCompare(b.eventId);
 }
 
-/** Reasons why an accepted event needs review (empty when it is fine). */
-function irregularities(event: PayoutEvent, current: PayoutSnapshot | undefined): string[] {
-  const reversalAmountDiffers = event.type === 'REVERSED' && current !== undefined && !event.amountBs.equals(current.amountBs);
-  return reversalAmountDiffers ? [`REVERSED amount ${event.amountBs} differs from COMPLETED amount ${current.amountBs}`] : [];
-}
-
 /** Replays events through the state machine. Illegal transitions are rejected, so e.g. a payout is never debited twice. Gaps in the history are reported, not hidden. */
 export function replayPayouts(events: PayoutEvent[]): ReplayResult {
   const accepted: PayoutEvent[] = [];
   const rejected: RejectedPayoutEvent[] = [];
-  const irregular: FlaggedPayoutEvent[] = [];
   const payouts = new Map<string, PayoutSnapshot>();
   // Every step received for each pay-out, whether or not it could be applied: a step that came out of order was still
   // received, and the order problem is reported on its own.
@@ -112,14 +98,12 @@ export function replayPayouts(events: PayoutEvent[]): ReplayResult {
       rejected.push({ event, from: current?.state, reason: `${event.type} not allowed after ${current?.state ?? 'no previous event'}` });
       continue;
     }
-    for (const reason of irregularities(event, current)) irregular.push({ event, reason });
     accepted.push(event);
     payouts.set(event.payoutId, {
       payoutId: event.payoutId,
       state: next,
       amountBs: event.amountBs,
       lastEventAt: event.at,
-      previewAmountBs: event.type === 'PREVIEW' ? event.amountBs : current?.previewAmountBs,
       confirmedAt: event.type === 'CONFIRM' ? event.at : current?.confirmedAt,
     });
   }
@@ -130,7 +114,7 @@ export function replayPayouts(events: PayoutEvent[]): ReplayResult {
     return missing.length === 0 ? [] : [{ payoutId: p.payoutId, state: p.state, missing, lastEventAt: p.lastEventAt }];
   });
 
-  return { accepted, irregular, incomplete, rejected, payouts: snapshots };
+  return { accepted, incomplete, rejected, payouts: snapshots };
 }
 
 /** Bs in pay-outs that were confirmed but have no terminal event yet. A bare PREVIEW is not in flight. */

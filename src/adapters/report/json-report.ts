@@ -46,7 +46,6 @@ export function renderJsonReport(result: ReconcileResult, options: ReportOptions
     ingestion: {
       duplicateIds: result.ingestion.duplicateIds,
       conflictingIds: result.ingestion.conflictingIds,
-      irregularPayoutEvents: flagged(result.ingestion.irregularPayoutEvents),
       rejectedPayoutEvents: flagged(result.ingestion.rejectedPayoutEvents),
     },
     ledger: ledgerJson(result.ledger),

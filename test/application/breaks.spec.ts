@@ -172,15 +172,63 @@ describe('payout lifecycle breaks', () => {
     expect(breaksOf(r, 'PAYOUT_REVERSED')).toEqual([expect.objectContaining({ subject: 'P1', severity: 'REVIEW' })]);
   });
 
-  it('CONFIRM_AMOUNT_MISMATCH: confirmed for a different amount than previewed', () => {
-    const r = run({ payoutEvents: [ev('a', 'P1', 'PREVIEW', 100, '09:00'), ev('b', 'P1', 'CONFIRM', 150, '09:01')] });
-    const [b] = breaksOf(r, 'CONFIRM_AMOUNT_MISMATCH');
-    expect(b).toMatchObject({ subject: 'P1', severity: 'BREAK' });
-    expect(b.reason).toMatch(/100\.00.*150\.00/);
-  });
+  describe('PAYOUT_AMOUNT_MISMATCH: every event carries the amount of the one before it', () => {
+    const mismatches = (events: ReturnType<typeof ev>[]) => breaksOf(run({ payoutEvents: events }), 'PAYOUT_AMOUNT_MISMATCH');
 
-  it('a CONFIRM with the same amount is fine', () => {
-    expect(breaksOf(run({ payoutEvents: lifecycle('P1', 100, ['09:00', '09:01']) }), 'CONFIRM_AMOUNT_MISMATCH')).toEqual([]);
+    it('a CONFIRM for another amount than the PREVIEW', () => {
+      const [b] = mismatches([ev('a', 'P1', 'PREVIEW', 100, '09:00'), ev('b', 'P1', 'CONFIRM', 150, '09:01')]);
+      expect(b).toMatchObject({ subject: 'P1', severity: 'BREAK' });
+      expect(b.reason).toMatch(/CONFIRM is 150\.00 Bs but PREVIEW was 100\.00 Bs/);
+    });
+
+    it('a COMPLETED for another amount than the CONFIRM, and the ledger debits the COMPLETED one', () => {
+      const r = run({ payoutEvents: [...lifecycle('P1', 100, ['09:00', '09:01']), ev('c', 'P1', 'COMPLETED', 500, '09:05')] });
+      const [b] = breaksOf(r, 'PAYOUT_AMOUNT_MISMATCH');
+      expect(b.reason).toMatch(/COMPLETED is 500\.00 Bs but CONFIRM was 100\.00 Bs/);
+      expect(r.balances.bsPaidOut.toString()).toBe('500.00');
+    });
+
+    it('a FAILED for another amount than the CONFIRM', () => {
+      const [b] = mismatches([...lifecycle('P1', 100, ['09:00', '09:01']), ev('f', 'P1', 'FAILED', 90, '09:05')]);
+      expect(b.reason).toMatch(/FAILED is 90\.00 Bs but CONFIRM was 100\.00 Bs/);
+    });
+
+    it('a REVERSED for another amount than the COMPLETED, which leaves part of it paid out', () => {
+      const r = run({ payoutEvents: [...lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05']), ev('rev', 'P1', 'REVERSED', 60, '10:00')] });
+      const [b] = breaksOf(r, 'PAYOUT_AMOUNT_MISMATCH');
+      expect(b).toMatchObject({ severity: 'BREAK', subject: 'P1' });
+      expect(b.reason).toMatch(/REVERSED is 60\.00 Bs but COMPLETED was 100\.00 Bs/);
+      expect(r.balances.bsPaidOut.toString()).toBe('40.00');
+    });
+
+    it('a chain with the same amount all the way, reversal included, reports nothing', () => {
+      expect(mismatches(lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05'], ['REVERSED', '10:00']))).toEqual([]);
+    });
+
+    it('one break per deviation: later events that agree with the deviating one are not reported again', () => {
+      expect(mismatches([ev('a', 'P1', 'PREVIEW', 100, '09:00'), ev('b', 'P1', 'CONFIRM', 150, '09:01'), ev('c', 'P1', 'COMPLETED', 150, '09:05')])).toHaveLength(1);
+    });
+
+    it('two deviations in one chain are two breaks with different ids', () => {
+      const found = mismatches([ev('a', 'P1', 'PREVIEW', 100, '09:00'), ev('b', 'P1', 'CONFIRM', 150, '09:01'), ev('c', 'P1', 'COMPLETED', 200, '09:05')]);
+      expect(found).toHaveLength(2);
+      expect(new Set(found.map((b) => b.id)).size).toBe(2);
+    });
+
+    it('when a step is missing the event is compared with the last one that was received', () => {
+      const [b] = mismatches([ev('a', 'P1', 'PREVIEW', 100, '09:00'), ev('c', 'P1', 'COMPLETED', 500, '09:05')]);
+      expect(b.reason).toMatch(/COMPLETED is 500\.00 Bs but PREVIEW was 100\.00 Bs/);
+    });
+
+    it('an event that was rejected is not compared: it is reported as an illegal transition instead', () => {
+      const r = run({ payoutEvents: [...lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05']), ev('again', 'P1', 'COMPLETED', 999, '09:06')] });
+      expect(breaksOf(r, 'ILLEGAL_TRANSITION')).toHaveLength(1);
+      expect(breaksOf(r, 'PAYOUT_AMOUNT_MISMATCH')).toEqual([]);
+    });
+
+    it('different pay-outs are never compared with each other', () => {
+      expect(mismatches([...lifecycle('P1', 100, ['09:00', '09:01']), ...lifecycle('P2', 999, ['09:00', '09:01'])])).toEqual([]);
+    });
   });
 
   it('REVERSAL_WITHOUT_COMPLETED: reversed but never completed', () => {
@@ -226,11 +274,6 @@ describe('payout lifecycle breaks', () => {
   it('a complete chain reports nothing', () => {
     const r = run({ payoutEvents: lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05']) });
     expect(breaksOf(r, 'INCOMPLETE_PAYOUT_CHAIN')).toEqual([]);
-  });
-
-  it('IRREGULAR_PAYOUT_EVENT: a REVERSED for a different amount is applied but needs review', () => {
-    const r = run({ payoutEvents: [...lifecycle('P1', 100, ['09:00', '09:01'], ['COMPLETED', '09:05']), ev('rev', 'P1', 'REVERSED', 60, '10:00')] });
-    expect(breaksOf(r, 'IRREGULAR_PAYOUT_EVENT')).toEqual([expect.objectContaining({ subject: 'rev', severity: 'REVIEW' })]);
   });
 
   it('UNCONFIRMED_PREVIEW is INFO, and a confirmed preview is not reported', () => {

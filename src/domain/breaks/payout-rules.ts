@@ -15,15 +15,22 @@ const reversed: BreakRule = ({ lifecycle }) =>
     .filter((e) => e.type === 'REVERSED')
     .map((e) => createBreak('PAYOUT_REVERSED', e.payoutId, `Completed pay-out reversed (${e.amountBs} Bs returned to the balance)`, e.at));
 
-const confirmAmountMismatch: BreakRule = ({ lifecycle }) => {
-  const previews = new Map<string, PayoutEvent>();
+/**
+ * Every event of a pay-out has to carry the amount of the one before it: what is previewed is what is confirmed,
+ * completed (or failed) and, if reversed, what is given back. Each event is compared with the previous one that was
+ * applied, so a deviation is reported once and not again by every event after it, and a lost step does not hide it.
+ * The ledger uses the amount of the COMPLETED and REVERSED events themselves, which is what the provider moved.
+ */
+const payoutAmountMismatch: BreakRule = ({ lifecycle }) => {
+  const previous = new Map<string, PayoutEvent>();
   const breaks: Break[] = [];
-  for (const e of lifecycle.accepted) {
-    if (e.type === 'PREVIEW') previews.set(e.payoutId, e);
-    const preview = previews.get(e.payoutId);
-    if (e.type === 'CONFIRM' && preview && !preview.amountBs.equals(e.amountBs)) {
-      breaks.push(createBreak('CONFIRM_AMOUNT_MISMATCH', e.payoutId, `Previewed ${preview.amountBs} Bs but confirmed ${e.amountBs} Bs`, e.at));
+  for (const event of lifecycle.accepted) {
+    const before = previous.get(event.payoutId);
+    if (before && !before.amountBs.equals(event.amountBs)) {
+      const reason = `${event.type} is ${event.amountBs} Bs but ${before.type} was ${before.amountBs} Bs`;
+      breaks.push(createBreak('PAYOUT_AMOUNT_MISMATCH', event.payoutId, reason, event.at, { idKey: event.eventId }));
     }
+    previous.set(event.payoutId, event);
   }
   return breaks;
 };
@@ -33,9 +40,6 @@ const rejectedEvents: BreakRule = ({ lifecycle }) =>
     const reversalWithoutCompletion = event.type === 'REVERSED' && from !== 'REVERSED';
     return createBreak(reversalWithoutCompletion ? 'REVERSAL_WITHOUT_COMPLETED' : 'ILLEGAL_TRANSITION', event.eventId, `${reason} (pay-out ${event.payoutId})`, event.at);
   });
-
-const irregularEvents: BreakRule = ({ lifecycle }) =>
-  lifecycle.irregular.map(({ event, reason }) => createBreak('IRREGULAR_PAYOUT_EVENT', event.eventId, `${reason} (pay-out ${event.payoutId}); applied because the provider reports it`, event.at));
 
 /** Money moved at these states, so the provider's word is applied to the ledger even though the history has a gap. */
 const MONEY_MOVING_STATES = ['COMPLETED', 'REVERSED'];
@@ -52,4 +56,4 @@ const unconfirmedPreview: BreakRule = ({ lifecycle }) =>
     .filter((p) => p.state === 'PREVIEWED')
     .map((p) => createBreak('UNCONFIRMED_PREVIEW', p.payoutId, `Previewed ${p.amountBs} Bs and never confirmed (no financial effect)`, p.lastEventAt));
 
-export const PAYOUT_RULES: BreakRule[] = [stuckPayout, reversed, confirmAmountMismatch, rejectedEvents, irregularEvents, incompleteChain, unconfirmedPreview];
+export const PAYOUT_RULES: BreakRule[] = [stuckPayout, reversed, payoutAmountMismatch, rejectedEvents, incompleteChain, unconfirmedPreview];

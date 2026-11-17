@@ -20,10 +20,9 @@ describe('the four provided files (the numbers of the plan)', () => {
     expect(() => assertBalanced(ledger)).not.toThrow();
   });
 
-  it('nothing was rejected or irregular, and the only duplicate is pe_0029', async () => {
+  it('nothing was rejected, and the only duplicate is pe_0029', async () => {
     const { ingestion } = await reconcileRealData();
     expect(ingestion.rejectedPayoutEvents).toEqual([]);
-    expect(ingestion.irregularPayoutEvents).toEqual([]);
     expect(ingestion.duplicateIds).toEqual(['pe_0029']);
     expect(ingestion.conflictingIds).toEqual([]);
   });
