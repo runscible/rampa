@@ -1,16 +1,16 @@
 import { Break, BreakThresholds, DEFAULT_THRESHOLDS } from '../domain/breaks/break';
 import { RepeatedId } from '../domain/breaks/context';
 import { findBreaks } from '../domain/breaks/find-breaks';
-import { Deposit, fingerprintDeposit } from '../domain/deposits/deposit';
-import { fingerprintFundingEvent, FundingEvent } from '../domain/funding/funding-event';
+import { Deposit } from '../domain/deposits/deposit';
+import { FundingEvent } from '../domain/funding/funding-event';
 import { accountBalances, assertBalanced, JournalEntry } from '../domain/ledger/ledger';
 import { postDeposit, postFunding, postPayout } from '../domain/ledger/posting';
-import { fingerprintPayoutEvent, PayoutEvent } from '../domain/payouts/payout-event';
+import { PayoutEvent } from '../domain/payouts/payout-event';
 import { FlaggedPayoutEvent, RejectedPayoutEvent, replayPayouts, totalInFlight } from '../domain/payouts/payout-state';
-import { fingerprintRatePoint, RatePoint, RateTable } from '../domain/rates/rate-table';
-import { dedupeById } from '../domain/shared/dedupe';
+import { RatePoint, RateTable } from '../domain/rates/rate-table';
 import { Money } from '../domain/shared/money';
 import { parseInstant } from '../domain/shared/time';
+import { dedupeFeed } from './feeds';
 
 export interface ReconcileInput {
   deposits: Deposit[];
@@ -63,10 +63,10 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
   const thresholds: BreakThresholds = { ...DEFAULT_THRESHOLDS, ...config };
   const upToCutoff = <T extends { at: Date }>(item: T): boolean => item.at.getTime() <= cutoff.getTime();
 
-  const deposits = dedupeById(input.deposits, (d) => d.txHash, fingerprintDeposit);
-  const funding = dedupeById(input.fundingEvents, (e) => e.eventId, fingerprintFundingEvent);
-  const payouts = dedupeById(input.payoutEvents, (e) => e.eventId, fingerprintPayoutEvent);
-  const rates = dedupeById(input.rates, (r) => r.at.toISOString(), fingerprintRatePoint);
+  const deposits = dedupeFeed('deposits', input.deposits);
+  const funding = dedupeFeed('fundingEvents', input.fundingEvents);
+  const payouts = dedupeFeed('payoutEvents', input.payoutEvents);
+  const rates = dedupeFeed('rates', input.rates);
   const lifecycle = replayPayouts(payouts.unique.filter(upToCutoff));
 
   const byId = (a: JournalEntry, b: JournalEntry) => a.id.localeCompare(b.id);

@@ -12,8 +12,9 @@ src/
     funding/       funding event entity (provider converts USDT → Bs)
     payouts/       payout event entity + lifecycle state machine
     breaks/        break model + rules (what does not reconcile)
-  application/     use cases over domain objects (reconcile)
+  application/     use cases (reconcile), the ingestion/report service and its ports
   adapters/files/  CSV/JSON parsers + file → use case facade
+  adapters/memory/ in-memory delivery repository (SQLite will be the second implementation)
   adapters/report/ text and JSON renderers (pure functions of the result)
   config/, app.module.ts, main.ts   composition root
 test/{domain,application,adapters}/, test/architecture.spec.ts
@@ -22,10 +23,12 @@ test/{domain,application,adapters}/, test/architecture.spec.ts
 ## Decisions
 
 - **Dependency rule:** `adapters → application → domain`, never the reverse. Enforced by `test/architecture.spec.ts` (domain and application must not import adapters or `@nestjs`).
-- **Ports only when a second implementation exists.** None yet; the first will be the repository (SQLite behind an interface, `:memory:` in tests).
+- **Ports only when a second implementation exists.** The only one is `DeliveryRepository` (in-memory now, SQLite next). Both must pass the same contract test (`test/support/delivery-repository-contract.ts`).
+- **State is an append-only delivery log.** The service stores what arrived, in order and tagged by batch; nothing is rewritten. Reports are always rebuilt from the log with the pure `reconcile`, so they are reproducible.
+- **Ingestion is idempotent by rule:** a delivery identical to one from an earlier batch is dropped, so re-sending files changes nothing; repeats inside one batch and deliveries with different content are kept so they show up as DUPLICATE_DELIVERY / EVENT_CONFLICT.
 - **Business rules in the domain, formats in adapters.** Invariants live in domain constructors (e.g. `createDeposit`); adapters only map source fields to domain input.
 - **Use cases are pure.** `reconcile(domain objects, config)` has no IO and no clock; the cutoff is injected. Adapters (`reconcileFiles`) parse, call the use case and surface bad rows instead of dropping them.
-- **State is derived, not stored.** The ledger is rebuilt from source records on every run, with deterministic entry ids, so re-ingesting is idempotent.
+- **The ledger is derived, not stored.** It is rebuilt from the delivery log on every report, with deterministic entry ids.
 - **Domain dependencies:** decimal.js and luxon only (pure, no IO).
 - **Adding a source:** a domain entity with a `createX` factory (invariants + fingerprint), a posting rule if it moves money, an adapter function `record → domain input` (`parseTable` / `parseJsonRecords`), and wiring in `reconcile`.
 - **Idempotency is a domain rule:** every source is deduplicated by its id (`dedupeById`): first delivery wins, identical repeats are ignored, differing repeats are reported as conflicts.
