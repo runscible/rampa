@@ -3,7 +3,7 @@ import { Instant } from '../shared/time';
 export type BreakSeverity = 'BREAK' | 'REVIEW' | 'INFO';
 
 /** Severity of each kind of finding: BREAK does not reconcile, REVIEW needs a human look, INFO is informational. */
-const SEVERITY = {
+export const BREAK_SEVERITY = {
   SPREAD_EXCEEDED: 'BREAK',
   LATE_FUNDING_WEBHOOK: 'BREAK',
   DEPOSIT_WITHOUT_WEBHOOK: 'BREAK',
@@ -24,7 +24,7 @@ const SEVERITY = {
   UNCONFIRMED_PREVIEW: 'INFO',
 } as const satisfies Record<string, BreakSeverity>;
 
-export type BreakType = keyof typeof SEVERITY;
+export type BreakType = keyof typeof BREAK_SEVERITY;
 
 /** Something that does not reconcile or needs a human look. */
 export interface Break {
@@ -48,7 +48,7 @@ interface BreakExtras {
 }
 
 export function createBreak(type: BreakType, subject: string, reason: string, at: Instant, extras: BreakExtras = {}): Break {
-  const base: Break = { id: `${type}:${extras.idKey ?? subject}`, type, severity: SEVERITY[type], subject, reason, at };
+  const base: Break = { id: `${type}:${extras.idKey ?? subject}`, type, severity: BREAK_SEVERITY[type], subject, reason, at };
   return extras.until === undefined ? base : { ...base, until: extras.until };
 }
 
