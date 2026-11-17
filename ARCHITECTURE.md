@@ -76,7 +76,7 @@ src/
     breaks/        break model + rules (what does not reconcile)
   application/     use cases (reconcile), the ingestion/report service and its ports
   adapters/http/   Nest controllers: the only door in (ingest + reports)
-  adapters/files/  CSV/JSON parsers + file → use case facade
+  adapters/files/  CSV/JSON parsers: raw text → validated domain objects
   adapters/memory/ in-memory delivery repository (unit tests)
   adapters/sqlite/ SQLite delivery repository (the one the server uses)
   adapters/report/ text and JSON renderers (pure functions of the result)
@@ -95,10 +95,10 @@ test/{domain,application,adapters,http,scripts}/, test/architecture.spec.ts
 - **Ingestion is idempotent by rule:** a delivery identical to one from an earlier batch is dropped, so re-sending files changes nothing; repeats inside one batch and deliveries with different content are kept so they show up as DUPLICATE_DELIVERY / EVENT_CONFLICT. Appends are atomic (one transaction) and the service handles one ingestion at a time, so concurrent identical requests are stored once.
 - **Records are stored as plain values and rebuilt through the domain factories** (`adapters/sqlite/codecs.ts`), so whatever comes out of the database is validated and compares equal to what went in.
 - **Business rules in the domain, formats in adapters.** Invariants live in domain constructors (e.g. `createDeposit`); adapters only map source fields to domain input.
-- **Use cases are pure.** `reconcile(domain objects, config)` has no IO and no clock; the cutoff is injected. Adapters (`reconcileFiles`) parse, call the use case and surface bad rows instead of dropping them.
+- **Use cases are pure.** `reconcile(domain objects, config)` has no IO and no clock; the cutoff is injected. Adapters parse and validate before calling it, so it only ever sees valid domain objects; a bad record never reaches it (the API answers 422).
 - **The ledger is derived, not stored.** It is rebuilt from the delivery log on every report, with deterministic entry ids.
 - **Domain dependencies:** decimal.js and luxon only (pure, no IO).
-- **Adding a source:** a domain entity with a `createX` factory (invariants + fingerprint), a posting rule if it moves money, an adapter function `record → domain input` (`parseTable` / `parseJsonRecords`), and wiring in `reconcile`.
+- **Adding a source** touches one place per layer: a domain entity with a `createX` factory (invariants and fingerprint) and a posting rule if it moves money; its entry in `FEEDS` (how to identify and compare a record) and in `ReconciliationService.report`, plus a line in `reconcile`; an adapter that turns the request into domain input (`parseTable` / `mapRecords`); a codec in `adapters/sqlite/codecs.ts`; and an endpoint in `IngestController` with its `ROUTE_NAMES` entry.
 - **Idempotency is a domain rule:** every source is deduplicated by its id (`dedupeById`): first delivery wins, identical repeats are ignored, differing repeats are reported as conflicts.
 - **Payout lifecycle is a state machine** (`payout-state`): events are replayed in a total order (instant, lifecycle step, id), so delivery order never matters. Only accepted events reach the ledger; illegal ones are rejected, and money-moving events that skip a step are applied and flagged as irregular.
 - **Breaks are pure rules over a context.** Each rule is a function `context → Break[]` in a list (`funding-rules`, `payout-rules`, `balance-rules`, `ingestion-rules`); `findBreaks` runs them and orders the report (severity, instant, id) with deterministic ids. A new check = one function in the list. Severity comes from one table.

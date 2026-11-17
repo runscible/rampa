@@ -32,7 +32,7 @@ State is kept in SQLite (`recon.sqlite` in the working directory), so a restart 
 | `POST /ingest/rates` | `text/csv` (`reference_rates.csv`) | same |
 | `POST /ingest/funding-webhooks` | JSON array (`funding_webhooks.json`) | same |
 | `POST /ingest/payout-events` | JSON array (`payout_events.json`) | same |
-| `GET /balances` | | the four balances (plus converted and funded) |
+| `GET /balances` | | the six balances: USDT unconverted and converted, Bs funded, available, paid out and in flight |
 | `GET /breaks` | | breaks report, instants in UTC and local time |
 | `GET /ledger` | | every journal entry |
 | `GET /report` | | everything: JSON, or plain text with `Accept: text/plain` |
