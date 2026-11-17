@@ -47,14 +47,17 @@ describe('reconcileFiles: deposits only (slice 1)', () => {
     expect(result.parseErrors).toEqual([{ file: 'usdt_deposits.csv', line: 3, reason: expect.stringContaining('oops') }]);
   });
 
-  it('real data: 14,500 USDT converted, 1,500 pending, 141,626.50 Bs funded, 132,605.55 Bs completed (before reversals)', () => {
+  it('real data: 14,500 USDT converted, 1,500 pending, 141,626.50 Bs funded, 129,505.55 Bs paid out, 12,120.95 available, 3,900 in flight', () => {
     const read = (name: string) => readFileSync(join(__dirname, '..', '..', 'data', name), 'utf8');
     const result = reconcileFiles(
       { deposits: read('usdt_deposits.csv'), fundingWebhooks: read('funding_webhooks.json'), payoutEvents: read('payout_events.json') },
       CUTOFF,
     );
-    expect(result.balances.bsPaidOut.toString()).toBe('132605.55');
-    expect(result.balances.bsAvailable.toString()).toBe('9020.95');
+    expect(result.balances.bsPaidOut.toString()).toBe('129505.55');
+    expect(result.balances.bsAvailable.toString()).toBe('12120.95');
+    expect(result.balances.bsInFlight.toString()).toBe('3900.00');
+    expect(result.ingestion.rejectedPayoutEvents).toEqual([]);
+    expect(result.ingestion.irregularPayoutEvents).toEqual([]);
     expect(result.ingestion.duplicateEventIds).toEqual(['pe_0029']);
     expect(result.balances.usdtUnconverted.toString()).toBe('1500.00');
     expect(result.balances.usdtConverted.toString()).toBe('14500.00');

@@ -3,6 +3,7 @@ import { fingerprintFundingEvent, FundingEvent } from '../domain/funding/funding
 import { accountBalances, assertBalanced, JournalEntry } from '../domain/ledger/ledger';
 import { postDeposit, postFunding, postPayout } from '../domain/ledger/posting';
 import { fingerprintPayoutEvent, PayoutEvent } from '../domain/payouts/payout-event';
+import { FlaggedPayoutEvent, RejectedPayoutEvent, replayPayouts, totalInFlight } from '../domain/payouts/payout-state';
 import { dedupeById } from '../domain/shared/dedupe';
 import { Money } from '../domain/shared/money';
 import { parseInstant } from '../domain/shared/time';
@@ -27,8 +28,10 @@ export interface Balances {
   bsFunded: Money;
   /** Bs available at the provider (funded minus completed pay-outs). */
   bsAvailable: Money;
-  /** Bs paid out through COMPLETED pay-outs. */
+  /** Bs paid out: COMPLETED pay-outs net of REVERSED ones. */
   bsPaidOut: Money;
+  /** Bs in confirmed pay-outs that are not final yet. */
+  bsInFlight: Money;
 }
 
 export interface IngestionNotes {
@@ -36,6 +39,10 @@ export interface IngestionNotes {
   duplicateEventIds: string[];
   /** Events delivered again with different content (first one kept; needs review). */
   conflictingEventIds: string[];
+  /** Pay-out events applied although a regular step was skipped (e.g. COMPLETED without CONFIRM). */
+  irregularPayoutEvents: FlaggedPayoutEvent[];
+  /** Pay-out events that made an illegal state transition (never applied). */
+  rejectedPayoutEvents: RejectedPayoutEvent[];
 }
 
 export interface ReconcileResult {
@@ -51,11 +58,12 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
 
   const funding = dedupeById(input.fundingEvents, (e) => e.eventId, fingerprintFundingEvent);
   const payouts = dedupeById(input.payoutEvents, (e) => e.eventId, fingerprintPayoutEvent);
+  const lifecycle = replayPayouts(payouts.unique.filter(upToCutoff));
 
   const ledger = [
     ...input.deposits.filter(upToCutoff).map(postDeposit),
     ...funding.unique.filter(upToCutoff).map(postFunding),
-    ...payouts.unique.filter(upToCutoff).flatMap((e) => postPayout(e) ?? []),
+    ...lifecycle.accepted.flatMap((e) => postPayout(e) ?? []),
   ].sort((a, b) => a.at.getTime() - b.at.getTime() || a.id.localeCompare(b.id));
   assertBalanced(ledger);
 
@@ -67,11 +75,14 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
       bsFunded: (accounts.get('FX_CLEARING') ?? Money.zero('BS')).negate(),
       bsAvailable: accounts.get('BS_PROVIDER_BALANCE') ?? Money.zero('BS'),
       bsPaidOut: accounts.get('BS_PAID_OUT') ?? Money.zero('BS'),
+      bsInFlight: totalInFlight(lifecycle.payouts),
     },
     ledger,
     ingestion: {
       duplicateEventIds: [...funding.duplicates, ...payouts.duplicates].map((e) => e.eventId),
       conflictingEventIds: [...funding.conflicts, ...payouts.conflicts].map((e) => e.eventId),
+      irregularPayoutEvents: lifecycle.irregular,
+      rejectedPayoutEvents: lifecycle.rejected,
     },
   };
 }

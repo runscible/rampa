@@ -15,7 +15,15 @@ describe('postPayout', () => {
     expect(accountBalance([entry!], 'BS_PROVIDER_BALANCE').toString()).toBe('-6200.00');
   });
 
-  it.each(['PREVIEW', 'CONFIRM'])('%s has no financial effect', (type) => {
+  it('REVERSED is the exact inverse of COMPLETED: funds return to the balance', () => {
+    const done = postPayout(event('COMPLETED'))!;
+    const reversed = postPayout(event('REVERSED'))!;
+    expect(() => assertBalanced([reversed])).not.toThrow();
+    expect(accountBalance([done, reversed], 'BS_PAID_OUT').isZero()).toBe(true);
+    expect(accountBalance([done, reversed], 'BS_PROVIDER_BALANCE').isZero()).toBe(true);
+  });
+
+  it.each(['PREVIEW', 'CONFIRM', 'FAILED'])('%s has no financial effect', (type) => {
     expect(postPayout(event(type))).toBeNull();
   });
 });
