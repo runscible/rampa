@@ -22,6 +22,8 @@ It is the **book of record and auditor** of the flow: it keeps what each party r
 
 ## Run it
 
+Needs **Node 22 or newer** (`better-sqlite3` requires it; developed and tested on Node 26). `better-sqlite3` is a native module: `npm install` fetches a prebuilt binary when there is one for your Node, and otherwise compiles it, which needs Python and a C++ toolchain.
+
 ```bash
 npm install
 npm start          # http://localhost:3000  (PORT to change it)
@@ -101,7 +103,7 @@ Every entry sums to zero in each currency; each account holds one currency. Debi
 | `USDT_CONVERTED` | USDT | USDT the provider converted |
 | `PARTNER_PREFUND` | USDT | What the partner funded (credit side of deposits) |
 | `BS_PROVIDER_BALANCE` | Bs | Our Bs balance at the provider |
-| `BS_PAID_OUT` | Bs | Bs paid out through COMPLETED pay-outs |
+| `BS_PAID_OUT` | Bs | Bs paid out: COMPLETED pay-outs, net of reversals |
 | `FX_CLEARING` | Bs | Bs side of the conversion |
 
 | Event | Entry |
@@ -146,7 +148,7 @@ Every entry sums to zero in each currency; each account holds one currency. Debi
 | INFO | `DUPLICATE_DELIVERY` | Same id and content twice in one request |
 | INFO | `UNCONFIRMED_PREVIEW` | PREVIEW never confirmed (no financial effect) |
 
-Limits are inclusive (a delay of exactly 10 minutes is not a break).
+The limits (10 min, 15 min, 0.5%) are the defaults of the variables above, and they are inclusive: a delay of exactly 10 minutes is not a break.
 
 ## Assumptions
 
@@ -154,6 +156,7 @@ Limits are inclusive (a delay of exactly 10 minutes is not a break).
 - **A negative Bs balance can happen.** The provider debits at COMPLETED and reserves nothing, so a pay-out can complete without funds. The ledger records it as is and it shows up as a break.
 - **Spread** is `(reference − provider rate) / reference`. A rate better than the reference is not a break.
 - **A COMPLETED with an incomplete history is applied.** The provider debits when it completes, whatever steps we did or did not receive, so leaving it out would overstate the available balance. The gap is reported for review instead. A pay-out whose events carry different amounts is applied with the amount of each COMPLETED and REVERSED event, which is what the provider moved, and flagged as a break. We do not roll back our books on our own: the provider is the one that executes, and a correction belongs to whoever reviews it.
+- **Only late webhooks are flagged.** One stamped *before* its deposit is not, and neither is a provider rate above the reference: the brief describes neither, and both are listed under next steps.
 - **A webhook that arrives after the cutoff does not count** for a deposit "without webhook": the report is as of the cutoff.
 - **Timestamps must carry an explicit offset**; one without it is ambiguous and is rejected. Amounts have at most 2 decimals and rates at most 6; extra decimals are rejected, not rounded.
 - **Everything after the cutoff is ignored**, including repeats.
@@ -162,8 +165,15 @@ Limits are inclusive (a delay of exactly 10 minutes is not a break).
 
 - Postgres instead of a single SQLite file, with idempotency enforced by the database itself (a unique key per delivery). Today one process serializes its own ingestions, which does not protect two instances writing at once.
 - Authenticate callers and verify webhook signatures; rate limits and larger JSON body limits.
-- Store the report breaks and notify (alerts on negative balance and stuck pay-outs) instead of only answering on demand; track break lifecycle (open, acknowledged, resolved).
-- Page and stream the ledger; ingest files in chunks.
+- Tell other services what happens instead of only answering on demand: publish an event when a break opens or resolves (an outbox), and keep a break lifecycle (open, acknowledged, resolved, by whom). Today a break exists while its cause does and disappears when the missing event arrives.
+- Corrections by people: an authorised adjustment that voids or corrects an entry with a reason, appended to the log and never deleting anything. Today the only correction is to deliver the missing event, because every report is rebuilt from the log.
+- Page the list endpoints (`/payouts`, the ledger) and ingest files in chunks.
 - Take reference rates from a market data source, with their own SLA; the hourly CSV is a stand-in.
 - Multi-day cutoffs, closing balances carried across days, and per-partner accounts.
 - Observability: structured logs, metrics per feed and per break type, tracing across ingestion and report.
+
+## Next steps, in order
+
+1. Decide the two rules the brief leaves open: a webhook stamped before its deposit, and a provider rate above the reference (a spread below zero).
+2. Break lifecycle and events, so other services do not have to poll.
+3. Postgres with a unique key per delivery, then authentication.

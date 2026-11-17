@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "Payments reconciliation service (USDT -> Bs) for the Rampa take-home",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "ts-node src/main.ts",
