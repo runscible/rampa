@@ -7,7 +7,7 @@ export interface Delivery<T> {
 }
 
 /**
- * Where deliveries are kept: an append-only log per feed. The use cases never rewrite or delete history,
+ * Where deliveries are kept: an append-only log per feed. `append` is atomic: either every delivery is stored or none. The use cases never rewrite or delete history,
  * so every report can be rebuilt from it.
  */
 export interface DeliveryRepository {
@@ -15,4 +15,6 @@ export interface DeliveryRepository {
   list<F extends FeedName>(feed: F): Promise<Array<Delivery<FeedRecords[F]>>>;
   /** Adds deliveries after the existing ones, keeping their order. */
   append<F extends FeedName>(feed: F, deliveries: Array<Delivery<FeedRecords[F]>>): Promise<void>;
+  /** Releases whatever the implementation holds (files, connections). The repository is not usable afterwards. */
+  close(): Promise<void>;
 }

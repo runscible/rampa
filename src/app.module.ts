@@ -1,5 +1,5 @@
-import { Module } from '@nestjs/common';
-import { InMemoryDeliveryRepository } from './adapters/memory/in-memory-delivery-repository';
+import { Inject, Module, OnModuleDestroy } from '@nestjs/common';
+import { SqliteDeliveryRepository } from './adapters/sqlite/sqlite-delivery-repository';
 import { IngestController } from './adapters/http/ingest.controller';
 import { ReportController } from './adapters/http/report.controller';
 import { DeliveryRepository } from './application/ports';
@@ -13,7 +13,11 @@ export const DELIVERY_REPOSITORY = Symbol('DELIVERY_REPOSITORY');
   controllers: [IngestController, ReportController],
   providers: [
     { provide: APP_CONFIG, useFactory: () => loadConfig() },
-    { provide: DELIVERY_REPOSITORY, useFactory: (): DeliveryRepository => new InMemoryDeliveryRepository() },
+    {
+      provide: DELIVERY_REPOSITORY,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig): DeliveryRepository => new SqliteDeliveryRepository(config.dbPath),
+    },
     {
       provide: ReconciliationService,
       inject: [DELIVERY_REPOSITORY, APP_CONFIG],
@@ -28,4 +32,10 @@ export const DELIVERY_REPOSITORY = Symbol('DELIVERY_REPOSITORY');
   ],
   exports: [APP_CONFIG],
 })
-export class AppModule {}
+export class AppModule implements OnModuleDestroy {
+  constructor(@Inject(DELIVERY_REPOSITORY) private readonly repository: DeliveryRepository) {}
+
+  async onModuleDestroy(): Promise<void> {
+    await this.repository.close();
+  }
+}

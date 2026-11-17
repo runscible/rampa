@@ -1,9 +1,20 @@
+import { FEEDS } from '../../src/application/feeds';
 import { Delivery, DeliveryRepository } from '../../src/application/ports';
 import { dep, rate } from './builders';
 
 /** Behaviour every DeliveryRepository must have. Run it against each implementation. */
-export function describeDeliveryRepositoryContract(name: string, create: () => DeliveryRepository | Promise<DeliveryRepository>): void {
+export function describeDeliveryRepositoryContract(name: string, build: () => DeliveryRepository | Promise<DeliveryRepository>): void {
   describe(`${name} (DeliveryRepository contract)`, () => {
+    const opened: DeliveryRepository[] = [];
+    const create = async (): Promise<DeliveryRepository> => {
+      const repo = await build();
+      opened.push(repo);
+      return repo;
+    };
+    afterEach(async () => {
+      await Promise.all(opened.splice(0).map((repo) => repo.close()));
+    });
+
     const d1 = dep('0x1', '10.00', '09:00');
     const d2 = dep('0x2', '20.00', '10:00');
     const d3 = dep('0x3', '30.00', '11:00');
@@ -37,6 +48,14 @@ export function describeDeliveryRepositoryContract(name: string, create: () => D
       const [stored] = await repo.list('deposits');
       expect(stored.record.amount.equals(d1.amount)).toBe(true);
       expect(stored.record.at.getTime()).toBe(d1.at.getTime());
+    });
+
+    it('keeps records exactly as they were, so repeats are still recognised after a round trip', async () => {
+      const repo = await create();
+      const original = dep('0x1', '10.00', '09:00');
+      await repo.append('deposits', [{ record: original, batch: 1 }]);
+      const [stored] = await repo.list('deposits');
+      expect(FEEDS.deposits.fingerprint(stored.record)).toBe(FEEDS.deposits.fingerprint(original));
     });
 
     it('does not expose its internal state: changing a result changes nothing', async () => {

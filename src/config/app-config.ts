@@ -11,7 +11,7 @@ export interface AppConfig {
   maxSpread: string;
   /** Decimal places kept for FX rates. */
   rateDecimals: number;
-  /** SQLite file path, or ':memory:'. */
+  /** SQLite file path, or ':memory:' for a throwaway database. */
   dbPath: string;
 }
 
@@ -22,7 +22,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   payoutSlaMinutes: 15,
   maxSpread: '0.005',
   rateDecimals: 6,
-  dbPath: ':memory:',
+  dbPath: 'recon.sqlite',
 };
 
 export const APP_CONFIG = Symbol('APP_CONFIG');

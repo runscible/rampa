@@ -12,4 +12,8 @@ export class InMemoryDeliveryRepository implements DeliveryRepository {
   async append<F extends FeedName>(feed: F, deliveries: Array<Delivery<FeedRecords[F]>>): Promise<void> {
     this.logs.set(feed, [...(this.logs.get(feed) ?? []), ...deliveries]);
   }
+
+  async close(): Promise<void> {
+    // nothing to release
+  }
 }

@@ -12,7 +12,7 @@ npm start          # http://localhost:3000  (PORT to change it)
 npm test           # unit + e2e tests
 ```
 
-State is **in memory** for now (restarting the server forgets everything). SQLite is the next step.
+State is kept in SQLite (`recon.sqlite` in the working directory), so a restart keeps everything. Delete the file to start from scratch.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -21,6 +21,7 @@ State is **in memory** for now (restarting the server forgets everything). SQLit
 | `RECON_FUNDING_SLA_MINUTES` | `10` | Max delay between a deposit and its funding webhook |
 | `RECON_PAYOUT_SLA_MINUTES` | `15` | Max wait between a pay-out CONFIRM and its terminal event |
 | `RECON_MAX_SPREAD` | `0.005` | Max provider spread vs. the reference rate (0.5%) |
+| `RECON_DB_PATH` | `recon.sqlite` | SQLite file (`:memory:` for a throwaway database; tests use it) |
 
 ## API
 
@@ -86,7 +87,7 @@ Every entry sums to zero in each currency; each account holds one currency. Debi
 
 ## Duplicates and out-of-order events
 
-- **The service keeps a log of deliveries** (in arrival order, tagged by request) and rebuilds every report from it. Nothing is rewritten.
+- **The service keeps a log of deliveries** (in arrival order, tagged by request) and rebuilds every report from it. Nothing is rewritten. Each request is stored in one transaction, and a process handles one ingestion at a time, so two identical requests sent together are stored once.
 - **Sending the same data again changes nothing.** A delivery identical to one from an earlier request is dropped. Ids are `tx_hash`, `event_id` and the rate's timestamp.
 - **A repeat inside one request is kept and reported** (INFO `DUPLICATE_DELIVERY`, e.g. `pe_0029`). A repeat with different content is a `EVENT_CONFLICT` break and the first delivery wins.
 - **Order does not matter.** Feeds can arrive in any order and events in any order within a feed. Pay-out events are replayed sorted by instant, then lifecycle step (PREVIEW < CONFIRM < COMPLETED < FAILED < REVERSED), then event id. At the same instant, deposits are applied before fundings, and fundings before pay-outs.
@@ -127,7 +128,7 @@ Limits are inclusive (a delay of exactly 10 minutes is not a break).
 
 ## What I would change for production
 
-- A real database (Postgres) with idempotent, transactional ingestion: today a request reads the log and then appends, which is not atomic under concurrent requests.
+- Postgres instead of a single SQLite file, with idempotency enforced by the database itself (a unique key per delivery). Today one process serializes its own ingestions, which does not protect two instances writing at once.
 - Authenticate callers and verify webhook signatures; rate limits and larger JSON body limits.
 - Store the report breaks and notify (alerts on negative balance and stuck pay-outs) instead of only answering on demand; track break lifecycle (open, acknowledged, resolved).
 - Page and stream the ledger; ingest files in chunks.
