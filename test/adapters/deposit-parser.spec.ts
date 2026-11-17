@@ -1,4 +1,4 @@
-import { parseDeposits } from '../src/ingest/parse-deposits';
+import { parseDeposits } from '../../src/adapters/files/parse-deposits';
 
 const HEADER = 'tx_hash,amount_usdt,timestamp';
 

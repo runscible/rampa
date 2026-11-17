@@ -1,5 +1,5 @@
-import { Currency, Money } from '../money/money';
-import { Instant } from '../time/time';
+import { Currency, Money } from '../shared/money';
+import { Instant } from '../shared/time';
 
 /** Ledger accounts. Each account holds a single currency (see ACCOUNT_CURRENCY). */
 export type Account = 'USDT_WALLET_PENDING' | 'PARTNER_PREFUND';

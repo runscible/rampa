@@ -1,4 +1,4 @@
-import { Deposit } from '../ingest/parse-deposits';
+import { Deposit } from '../deposits/deposit';
 import { JournalEntry } from './ledger';
 
 /** USDT arrives at the provider's wallet: Dr USDT_WALLET_PENDING / Cr PARTNER_PREFUND. */

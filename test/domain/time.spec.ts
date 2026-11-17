@@ -1,4 +1,4 @@
-import { formatInZone, parseInstant } from '../src/time/time';
+import { formatInZone, parseInstant } from '../../src/domain/shared/time';
 
 describe('parseInstant', () => {
   it('converts an offset timestamp to the right UTC instant', () => {

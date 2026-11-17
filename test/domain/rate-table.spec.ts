@@ -1,5 +1,5 @@
-import { parseInstant } from '../src/time/time';
-import { RateTable } from '../src/rates/rate-table';
+import { parseInstant } from '../../src/domain/shared/time';
+import { RateTable } from '../../src/domain/rates/rate-table';
 
 const at = parseInstant;
 

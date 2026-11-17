@@ -1,4 +1,4 @@
-import { parseCsv } from '../src/ingest/csv';
+import { parseCsv } from '../../src/adapters/files/csv';
 
 describe('parseCsv', () => {
   it('maps rows to objects by header', () => {

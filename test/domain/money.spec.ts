@@ -1,4 +1,4 @@
-import { Money } from '../src/money/money';
+import { Money } from '../../src/domain/shared/money';
 
 describe('Money', () => {
   it('parses a decimal string and prints with 2 decimals', () => {
