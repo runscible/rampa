@@ -47,10 +47,21 @@ describe('reconcileFiles: deposits only (slice 1)', () => {
     expect(result.parseErrors).toEqual([{ file: 'usdt_deposits.csv', line: 3, reason: expect.stringContaining('oops') }]);
   });
 
-  it('real data: 16,000 USDT deposited, nothing converted yet in this slice', () => {
-    const deposits = readFileSync(join(__dirname, '..', '..', 'data', 'usdt_deposits.csv'), 'utf8');
-    const result = reconcileFiles({ deposits }, CUTOFF);
-    expect(result.balances.usdtUnconverted.toString()).toBe('16000.00');
+  it('real data: 14,500 USDT converted, 1,500 still pending, 141,626.50 Bs funded', () => {
+    const read = (name: string) => readFileSync(join(__dirname, '..', '..', 'data', name), 'utf8');
+    const result = reconcileFiles(
+      { deposits: read('usdt_deposits.csv'), fundingWebhooks: read('funding_webhooks.json') },
+      CUTOFF,
+    );
+    expect(result.balances.usdtUnconverted.toString()).toBe('1500.00');
+    expect(result.balances.usdtConverted.toString()).toBe('14500.00');
+    expect(result.balances.bsFunded.toString()).toBe('141626.50');
     expect(result.parseErrors).toEqual([]);
+    expect(() => assertBalanced(result.ledger)).not.toThrow();
+  });
+
+  it('surfaces funding webhook parse errors with the file name', () => {
+    const result = reconcileFiles({ deposits: HEADER, fundingWebhooks: '{nope' }, CUTOFF);
+    expect(result.parseErrors).toEqual([{ file: 'funding_webhooks.json', line: 1, reason: expect.stringMatching(/JSON/i) }]);
   });
 });

@@ -2,11 +2,19 @@ import { Currency, Money } from '../shared/money';
 import { Instant } from '../shared/time';
 
 /** Ledger accounts. Each account holds a single currency (see ACCOUNT_CURRENCY). */
-export type Account = 'USDT_WALLET_PENDING' | 'PARTNER_PREFUND';
+export type Account =
+  | 'USDT_WALLET_PENDING'
+  | 'USDT_CONVERTED'
+  | 'PARTNER_PREFUND'
+  | 'BS_PROVIDER_BALANCE'
+  | 'FX_CLEARING';
 
 export const ACCOUNT_CURRENCY: Record<Account, Currency> = {
   USDT_WALLET_PENDING: 'USDT',
+  USDT_CONVERTED: 'USDT',
   PARTNER_PREFUND: 'USDT',
+  BS_PROVIDER_BALANCE: 'BS',
+  FX_CLEARING: 'BS',
 };
 
 /** Signed amount: debit is positive, credit is negative. A balanced entry sums to zero per currency. */

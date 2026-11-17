@@ -1,11 +1,14 @@
 import { reconcile, ReconcileConfig, ReconcileResult } from '../../application/reconcile';
 import { ParseError } from './csv';
 import { parseDeposits } from './parse-deposits';
+import { parseFundingEvents } from './parse-funding';
 
 /** Raw contents of the source files. */
 export interface FileInput {
   /** usdt_deposits.csv */
   deposits: string;
+  /** funding_webhooks.json */
+  fundingWebhooks?: string;
 }
 
 export interface SourceParseError extends ParseError {
@@ -16,11 +19,14 @@ export interface FileReconcileResult extends ReconcileResult {
   parseErrors: SourceParseError[];
 }
 
+const tagged = (file: string, errors: ParseError[]): SourceParseError[] => errors.map((e) => ({ file, ...e }));
+
 /** Inbound adapter: parses the files, runs the use case, and surfaces bad rows instead of dropping them. */
 export function reconcileFiles(files: FileInput, config: ReconcileConfig): FileReconcileResult {
-  const { records, errors } = parseDeposits(files.deposits);
+  const deposits = parseDeposits(files.deposits);
+  const funding = parseFundingEvents(files.fundingWebhooks ?? '[]');
   return {
-    ...reconcile({ deposits: records }, config),
-    parseErrors: errors.map((e) => ({ file: 'usdt_deposits.csv', ...e })),
+    ...reconcile({ deposits: deposits.records, fundingEvents: funding.records }, config),
+    parseErrors: [...tagged('usdt_deposits.csv', deposits.errors), ...tagged('funding_webhooks.json', funding.errors)],
   };
 }
