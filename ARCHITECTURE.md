@@ -2,6 +2,68 @@
 
 Pragmatic hexagonal architecture. Complements `PLAN.md` (what to build) and `BRIEF.md` (the assignment). Update this file in the same commit that changes a decision.
 
+## Overview
+
+```mermaid
+flowchart TB
+    client(["HTTP client<br/>provider, script, curl"])
+
+    subgraph root["Composition root"]
+        module["app.module.ts<br/>wires each port to an implementation"]
+    end
+
+    subgraph adapters["adapters: the outside world"]
+        subgraph http["http (Nest)"]
+            ingestCtl["IngestController<br/>POST /ingest/*"]
+            reportCtl["ReportController<br/>GET /balances /breaks /ledger /report"]
+        end
+        files["files<br/>CSV and JSON parsers"]
+        render["report<br/>text and JSON renderers"]
+        sqlite["sqlite<br/>SqliteDeliveryRepository + codecs"]
+        memory["memory<br/>InMemoryDeliveryRepository, tests only"]
+    end
+
+    subgraph application["application"]
+        service["ReconciliationService<br/>ingest and report"]
+        port{{"DeliveryRepository<br/>port: append-only log"}}
+        reconcile["reconcile<br/>pure use case"]
+    end
+
+    subgraph domain["domain: pure, no Nest, no IO"]
+        entities["Deposit, FundingEvent,<br/>PayoutEvent, RatePoint<br/>invariants live here"]
+        ledger["ledger<br/>journal entries and posting rules"]
+        payouts["payout-state<br/>lifecycle state machine"]
+        breaks["breaks<br/>one rule per kind of problem"]
+        shared["shared<br/>Money, time, dedupe"]
+    end
+
+    client --> ingestCtl
+    client --> reportCtl
+    ingestCtl --> files
+    ingestCtl --> service
+    reportCtl --> service
+    reportCtl --> render
+    files --> entities
+    service --> port
+    service --> reconcile
+    reconcile --> ledger
+    reconcile --> payouts
+    reconcile --> breaks
+    ledger --> shared
+    entities --> shared
+    sqlite -. implements .-> port
+    memory -. implements .-> port
+    sqlite --> entities
+    module -. builds and injects .-> service
+    module -. picks .-> sqlite
+```
+
+Arrows point in the direction of dependency, so everything points inward: `adapters` depend on `application`, and `application` on `domain`, never the other way. A dotted arrow means "implements" or "wires". Nest lives only in `adapters/http` and the composition root.
+
+**An ingest request** goes `IngestController` → parser (`files`) → domain entity (the factory validates it) → `ReconciliationService.ingest` → `DeliveryRepository.append`. Nothing is stored if any record is invalid.
+
+**A report request** goes `ReportController` → `ReconciliationService.report` → reads the whole delivery log → `reconcile` (dedupe, replay payouts, post the ledger, run the break rules) → renderer → response. The ledger and the breaks are never stored: they are rebuilt from the log every time.
+
 ```
 src/
   domain/          pure: no Nest, no IO, no file formats
