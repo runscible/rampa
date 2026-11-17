@@ -15,7 +15,7 @@ flowchart TB
     subgraph adapters["adapters: the outside world"]
         subgraph http["http (Nest)"]
             ingestCtl["IngestController<br/>POST /ingest/*"]
-            reportCtl["ReportController<br/>GET /balances /breaks /ledger /report"]
+            reportCtl["ReportController<br/>GET /balances /breaks /ledger /report<br/>/payouts /deposits"]
         end
         files["files<br/>CSV and JSON parsers"]
         render["report<br/>text and JSON renderers"]
@@ -34,6 +34,7 @@ flowchart TB
         ledger["ledger<br/>journal entries and posting rules"]
         payouts["payout-state<br/>lifecycle state machine"]
         breaks["breaks<br/>one rule per kind of problem"]
+        operations["operations<br/>one view per pay-out and per deposit"]
         shared["shared<br/>Money, time, dedupe"]
     end
 
@@ -49,6 +50,7 @@ flowchart TB
     reconcile --> ledger
     reconcile --> payouts
     reconcile --> breaks
+    reconcile --> operations
     ledger --> shared
     entities --> shared
     sqlite -. implements .-> port
@@ -74,6 +76,7 @@ src/
     funding/       funding event entity (provider converts USDT → Bs)
     payouts/       payout event entity + lifecycle state machine
     breaks/        break model + rules (what does not reconcile)
+    operations/    per-operation views: how far each pay-out and deposit got, with its history
   application/     use cases (reconcile), the ingestion/report service and its ports
   adapters/http/   Nest controllers: the only door in (ingest + reports)
   adapters/files/  CSV/JSON parsers: raw text → validated domain objects
@@ -103,4 +106,5 @@ test/{domain,application,adapters,http,scripts}/, test/architecture.spec.ts
 - **Payout lifecycle is a state machine** (`payout-state`): events are replayed in a total order (instant, lifecycle step, id), so delivery order never matters. Only accepted events reach the ledger. Illegal ones are rejected (never what would invent money, such as a REVERSED with nothing completed). A lost step is not hidden: the pay-out is still recorded and a rule reports every step its final state implies that was never received. Money-moving events are applied even with a gap, because the provider has already moved the money.
 - **Breaks are pure rules over a context.** Each rule is a function `context → Break[]` in a list (`funding-rules`, `payout-rules`, `balance-rules`, `ingestion-rules`); `findBreaks` runs them and orders the report (severity, instant, id) with deterministic ids. A new check = one function in the list. Severity comes from one table.
 - **Reports are pure functions of the result.** No clock, no randomness: two runs over the same files produce identical bytes (`out/run-output.txt` / `.json`, produced through the API), so a rerun can be diffed. Instants are stored in UTC and only converted to the configured zone when rendering.
+- **Every operation can be read on its own.** `reconcile` returns one view per pay-out and per deposit (state, every event received and whether it was applied, what is missing, the money it moved, its breaks), so other services can decide without re-deriving anything. The view states facts; it never decides what to do.
 - **Ledger order:** entries are sorted by instant only; ties keep source order (deposits, fundings, payouts) via a stable sort.

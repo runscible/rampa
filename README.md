@@ -11,14 +11,14 @@ It is the **book of record and auditor** of the flow: it keeps what each party r
 **It is responsible for**
 - Keeping every delivery from the four feeds, in arrival order, without rewriting anything.
 - Deriving the double-entry ledger and the balances from that log, always the same way.
-- Following each pay-out through its lifecycle and saying how far it got.
+- Following each pay-out through its lifecycle, saying how far it got, and making that available per operation so other services can decide.
 - Reporting what does not reconcile, with the reason, without correcting it: the ledger records what the provider said, and the break says it is wrong.
 
 **It is not responsible for** moving money, deciding or running rollbacks and compensations, retrying pay-outs, talking to the provider or authorising anything. Other services do that: they read these facts and decide. The only rollback that belongs here is the ingestion itself (a request is all or nothing). A provider-side reversal is recorded as a compensating entry, never by deleting anything.
 
 **What callers can rely on**
 - Input: sending the same data again changes nothing, the order does not matter, and a request is stored completely or not at all.
-- Output: every figure is rebuilt from the delivery log, so it can be traced back to events. Events that make no sense are not applied, but they show up as breaks. What the service cannot corroborate is reported as a break or a review, never smoothed over.
+- Output: every figure is rebuilt from the delivery log, so it can be traced back to events. Events that make no sense are not applied, but they show up as breaks and stay in the history of their pay-out with the reason. What the service cannot corroborate is reported as a break or a review, never smoothed over.
 
 ## Run it
 
@@ -52,10 +52,13 @@ State is kept in SQLite (`recon.sqlite` in the working directory), so a restart 
 | `GET /breaks` | | breaks report, instants in UTC and local time |
 | `GET /ledger` | | every journal entry |
 | `GET /report` | | everything: JSON, or plain text with `Accept: text/plain` |
+| `GET /payouts/:payoutId` | | one pay-out: its state, every event received (applied or not, and why), the steps that are missing, the Bs it moved in our ledger, and its breaks |
+| `GET /payouts` | | every pay-out; `?state=` keeps one state (`PREVIEWED`, `CONFIRMED`, `COMPLETED`, `FAILED`, `REVERSED` or `UNKNOWN`), e.g. `?state=CONFIRMED` for what is still in flight |
+| `GET /deposits/:txHash` | | one deposit: what came in, every webhook that converted it, what they credited, and its breaks |
 
 The `GET`s take an optional `?cutoff=<ISO-8601 with offset>` (encode `+` as `%2B`). The default is `RECON_CUTOFF`.
 
-Errors: `422` with the offending lines when any record of an ingest request is invalid (**nothing is stored**, fix the file and send it again); `400` for JSON that does not parse or a bad `cutoff`; `415` when a CSV feed is not sent as `text/csv`.
+Errors: `422` with the offending lines when any record of an ingest request is invalid (**nothing is stored**, fix the file and send it again); `400` for JSON that does not parse, a bad `cutoff` or an unknown `state`; `404` for a pay-out or a deposit with nothing known by the cutoff; `415` when a CSV feed is not sent as `text/csv`.
 
 ```bash
 curl -X POST localhost:3000/ingest/deposits         -H 'Content-Type: text/csv'         --data-binary @data/usdt_deposits.csv

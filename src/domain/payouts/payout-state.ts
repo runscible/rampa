@@ -2,7 +2,8 @@ import { Money } from '../shared/money';
 import { Instant } from '../shared/time';
 import { PAYOUT_EVENT_TYPES, PayoutEvent, PayoutEventType } from './payout-event';
 
-export type PayoutState = 'PREVIEWED' | 'CONFIRMED' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+export const PAYOUT_STATES = ['PREVIEWED', 'CONFIRMED', 'COMPLETED', 'FAILED', 'REVERSED'] as const;
+export type PayoutState = (typeof PAYOUT_STATES)[number];
 
 type Current = PayoutState | 'NONE';
 
@@ -43,6 +44,14 @@ export interface RejectedPayoutEvent {
   from: PayoutState | undefined;
 }
 
+/** One delivered event in the history of a pay-out: applied to its state, or kept out with the reason. */
+export interface PayoutHistoryEntry {
+  event: PayoutEvent;
+  applied: boolean;
+  /** Why it was not applied. Only present when `applied` is false. */
+  reason?: string;
+}
+
 export interface PayoutSnapshot {
   payoutId: string;
   state: PayoutState;
@@ -66,6 +75,8 @@ export interface IncompletePayout {
 export interface ReplayResult {
   /** Events that made a legal transition, in processing order. Only these may touch the ledger. */
   accepted: PayoutEvent[];
+  /** Every event received, applied or not, in processing order. Nothing that arrived is left out. */
+  history: PayoutHistoryEntry[];
   /** Pay-outs with steps missing from their history. Their money effect, if any, is applied all the same. */
   incomplete: IncompletePayout[];
   /** Events that arrived in a state where they make no sense (never applied, needs review). */
@@ -85,6 +96,7 @@ function byLifecycle(a: PayoutEvent, b: PayoutEvent): number {
 export function replayPayouts(events: PayoutEvent[]): ReplayResult {
   const accepted: PayoutEvent[] = [];
   const rejected: RejectedPayoutEvent[] = [];
+  const history: PayoutHistoryEntry[] = [];
   const payouts = new Map<string, PayoutSnapshot>();
   // Every step received for each pay-out, whether or not it could be applied: a step that came out of order was still
   // received, and the order problem is reported on its own.
@@ -95,10 +107,13 @@ export function replayPayouts(events: PayoutEvent[]): ReplayResult {
     const current = payouts.get(event.payoutId);
     const next = nextState(current?.state, event.type);
     if (next === undefined) {
-      rejected.push({ event, from: current?.state, reason: `${event.type} not allowed after ${current?.state ?? 'no previous event'}` });
+      const reason = `${event.type} not allowed after ${current?.state ?? 'no previous event'}`;
+      rejected.push({ event, from: current?.state, reason });
+      history.push({ event, applied: false, reason });
       continue;
     }
     accepted.push(event);
+    history.push({ event, applied: true });
     payouts.set(event.payoutId, {
       payoutId: event.payoutId,
       state: next,
@@ -114,7 +129,7 @@ export function replayPayouts(events: PayoutEvent[]): ReplayResult {
     return missing.length === 0 ? [] : [{ payoutId: p.payoutId, state: p.state, missing, lastEventAt: p.lastEventAt }];
   });
 
-  return { accepted, incomplete, rejected, payouts: snapshots };
+  return { accepted, history, incomplete, rejected, payouts: snapshots };
 }
 
 /** Bs in pay-outs that were confirmed but have no terminal event yet. A bare PREVIEW is not in flight. */

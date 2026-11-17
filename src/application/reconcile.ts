@@ -3,6 +3,8 @@ import { RepeatedId } from '../domain/breaks/context';
 import { findBreaks } from '../domain/breaks/find-breaks';
 import { Deposit } from '../domain/deposits/deposit';
 import { FundingEvent } from '../domain/funding/funding-event';
+import { buildDepositViews, DepositView } from '../domain/operations/deposit-view';
+import { buildPayoutViews, PayoutView } from '../domain/operations/payout-view';
 import { accountBalances, assertBalanced, JournalEntry } from '../domain/ledger/ledger';
 import { postDeposit, postFunding, postPayout } from '../domain/ledger/posting';
 import { PayoutEvent } from '../domain/payouts/payout-event';
@@ -48,11 +50,18 @@ export interface IngestionNotes {
   rejectedPayoutEvents: RejectedPayoutEvent[];
 }
 
+/** One view per pay-out and per deposit: how far each got, its history, what is missing and its breaks. */
+export interface Operations {
+  payouts: PayoutView[];
+  deposits: DepositView[];
+}
+
 export interface ReconcileResult {
   balances: Balances;
   /** Everything that does not reconcile or needs a human look, most severe first. */
   breaks: Break[];
   ledger: JournalEntry[];
+  operations: Operations;
   ingestion: IngestionNotes;
 }
 
@@ -93,6 +102,18 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
   const duplicates = repeated('duplicates');
   const conflicts = repeated('conflicts');
 
+  const breaks = findBreaks({
+    cutoff,
+    thresholds,
+    deposits: depositsInReport,
+    fundingEvents: fundingInReport,
+    rates: new RateTable(rates.unique),
+    lifecycle,
+    ledger,
+    duplicates,
+    conflicts,
+  });
+
   const accounts = accountBalances(ledger);
   return {
     balances: {
@@ -103,18 +124,12 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
       bsPaidOut: accounts.get('BS_PAID_OUT') ?? Money.zero('BS'),
       bsInFlight: totalInFlight(lifecycle.payouts),
     },
-    breaks: findBreaks({
-      cutoff,
-      thresholds,
-      deposits: depositsInReport,
-      fundingEvents: fundingInReport,
-      rates: new RateTable(rates.unique),
-      lifecycle,
-      ledger,
-      duplicates,
-      conflicts,
-    }),
+    breaks,
     ledger,
+    operations: {
+      payouts: buildPayoutViews(lifecycle, ledger, breaks),
+      deposits: buildDepositViews(depositsInReport, fundingInReport, breaks),
+    },
     ingestion: {
       duplicateIds: duplicates.map((r) => r.id),
       conflictingIds: conflicts.map((r) => r.id),

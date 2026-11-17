@@ -32,6 +32,9 @@ export function postFunding(event: FundingEvent): JournalEntry {
   };
 }
 
+/** Id of the ledger entry a pay-out event produces (when it produces one). */
+export const payoutEntryId = (eventId: string): string => `payout:${eventId}`;
+
 /** How much each event type moves into BS_PAID_OUT: COMPLETED pays out, REVERSED returns the funds. Absent = no movement. */
 const PAID_OUT_SIGN: Partial<Record<PayoutEventType, 1 | -1>> = { COMPLETED: 1, REVERSED: -1 };
 
@@ -46,7 +49,7 @@ export function postPayout(event: PayoutEvent): JournalEntry | null {
   if (sign === undefined) return null;
   const paid = sign === 1 ? event.amountBs : event.amountBs.negate();
   return {
-    id: `payout:${event.eventId}`,
+    id: payoutEntryId(event.eventId),
     at: event.at,
     lines: [
       { account: 'BS_PAID_OUT', amount: paid },
