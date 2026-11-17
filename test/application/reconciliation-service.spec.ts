@@ -72,6 +72,15 @@ describe('ReconciliationService', () => {
     });
   });
 
+  it('two identical requests at the same time store the data once', async () => {
+    const service = newService();
+    const batch = [dep('0x1', '100.00', '09:00'), dep('0x2', '50.00', '09:30')];
+    const [a, b] = await Promise.all([service.ingest('deposits', batch), service.ingest('deposits', batch)]);
+    expect([a.stored, b.stored].sort()).toEqual([0, 2]);
+    expect([a.ignored, b.ignored].sort()).toEqual([0, 2]);
+    expect((await service.report()).balances.usdtUnconverted.toString()).toBe('150.00');
+  });
+
   it('does not depend on which feed arrives first', async () => {
     const deposits = [dep('0x1', '1000.00', '09:00')];
     const fundings = [fw('fw_1', '0x1', 1000, '9.95', 9950, '09:05')];

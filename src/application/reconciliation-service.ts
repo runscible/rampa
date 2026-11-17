@@ -34,7 +34,16 @@ export class ReconciliationService {
     private readonly config: ReconcileConfig,
   ) {}
 
-  async ingest<F extends FeedName>(feed: F, records: Array<FeedRecords[F]>): Promise<IngestSummary> {
+  /** Ingestions run one at a time: each one reads the log and then appends to it, so two at once would both miss the other. */
+  private writes: Promise<unknown> = Promise.resolve();
+
+  ingest<F extends FeedName>(feed: F, records: Array<FeedRecords[F]>): Promise<IngestSummary> {
+    const run = this.writes.then(() => this.store(feed, records));
+    this.writes = run.catch(() => undefined);
+    return run;
+  }
+
+  private async store<F extends FeedName>(feed: F, records: Array<FeedRecords[F]>): Promise<IngestSummary> {
     const existing = await this.repository.list(feed);
     const batch = existing.reduce((latest, d) => Math.max(latest, d.batch), 0) + 1;
     const fresh = newDeliveries(feed, existing, records, batch);
