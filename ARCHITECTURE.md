@@ -13,16 +13,19 @@ src/
     payouts/       payout event entity + lifecycle state machine
     breaks/        break model + rules (what does not reconcile)
   application/     use cases (reconcile), the ingestion/report service and its ports
+  adapters/http/   Nest controllers: the only door in (ingest + reports)
   adapters/files/  CSV/JSON parsers + file → use case facade
   adapters/memory/ in-memory delivery repository (SQLite will be the second implementation)
   adapters/report/ text and JSON renderers (pure functions of the result)
-  config/, app.module.ts, main.ts   composition root
+  config/, app.module.ts, main.ts   composition root (wires ports to implementations)
 test/{domain,application,adapters}/, test/architecture.spec.ts
 ```
 
 ## Decisions
 
 - **Dependency rule:** `adapters → application → domain`, never the reverse. Enforced by `test/architecture.spec.ts` (domain and application must not import adapters or `@nestjs`).
+- **Nest is the delivery mechanism, nothing more.** It is confined to `adapters/http`, `app.module.ts` and `main.ts` (enforced by test). Controllers parse the request, call `ReconciliationService` and shape the response; the service and everything below it are plain classes. Adding the API changed nothing in `domain/` or `application/`.
+- **A request is all or nothing.** If any record of an ingest request is invalid the answer is 422 with the offending lines and nothing is stored; a corrected file can be sent again because ingestion is idempotent.
 - **Ports only when a second implementation exists.** The only one is `DeliveryRepository` (in-memory now, SQLite next). Both must pass the same contract test (`test/support/delivery-repository-contract.ts`).
 - **State is an append-only delivery log.** The service stores what arrived, in order and tagged by batch; nothing is rewritten. Reports are always rebuilt from the log with the pure `reconcile`, so they are reproducible.
 - **Ingestion is idempotent by rule:** a delivery identical to one from an earlier batch is dropped, so re-sending files changes nothing; repeats inside one batch and deliveries with different content are kept so they show up as DUPLICATE_DELIVERY / EVENT_CONFLICT.

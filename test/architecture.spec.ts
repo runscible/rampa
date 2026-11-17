@@ -32,3 +32,15 @@ describe('dependency rule: adapters -> application -> domain', () => {
     }
   });
 });
+
+describe('Nest is only the delivery mechanism', () => {
+  const NEST_ALLOWED = [join(SRC, 'adapters', 'http'), join(SRC, 'app.module.ts'), join(SRC, 'main.ts')];
+
+  it('is imported only by the HTTP adapter and the composition root', () => {
+    const offenders = files(SRC).filter(
+      (file) => /from '@nestjs\//.test(readFileSync(file, 'utf8')) && !NEST_ALLOWED.some((allowed) => file.startsWith(allowed)),
+    );
+    expect(offenders).toEqual([]);
+  });
+});
+

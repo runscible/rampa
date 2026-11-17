@@ -6,14 +6,8 @@ export interface JsonRecordsResult<T> {
   errors: ParseError[];
 }
 
-/** JSON array -> typed records. A record that fails `convert` is reported by position; the rest are kept. */
-export function parseJsonRecords<T>(json: string, convert: (record: unknown) => T): JsonRecordsResult<T> {
-  let data: unknown;
-  try {
-    data = JSON.parse(json);
-  } catch {
-    return { records: [], errors: [{ line: 1, reason: 'Invalid JSON' }] };
-  }
+/** Parsed JSON array -> typed records. A record that fails `convert` is reported by position; the rest are kept. */
+export function mapRecords<T>(data: unknown, convert: (record: unknown) => T): JsonRecordsResult<T> {
   if (!Array.isArray(data)) return { records: [], errors: [{ line: 1, reason: 'Expected a JSON array' }] };
 
   const records: T[] = [];
@@ -26,6 +20,17 @@ export function parseJsonRecords<T>(json: string, convert: (record: unknown) => 
     }
   });
   return { records, errors };
+}
+
+/** JSON text -> typed records (see mapRecords). Text that is not JSON is reported as an error, not thrown. */
+export function parseJsonRecords<T>(json: string, convert: (record: unknown) => T): JsonRecordsResult<T> {
+  let data: unknown;
+  try {
+    data = JSON.parse(json);
+  } catch {
+    return { records: [], errors: [{ line: 1, reason: 'Invalid JSON' }] };
+  }
+  return mapRecords(data, convert);
 }
 
 /** Checks that `record` is an object whose listed fields are all strings or numbers. */

@@ -1,5 +1,5 @@
 import { createFundingEvent, FundingEvent } from '../../domain/funding/funding-event';
-import { JsonRecordsResult, parseJsonRecords, requireFields } from './json-records';
+import { JsonRecordsResult, mapRecords, parseJsonRecords, requireFields } from './json-records';
 
 export type ParsedFundingEvents = JsonRecordsResult<FundingEvent>;
 
@@ -16,6 +16,11 @@ function toFundingEvent(record: unknown): FundingEvent {
     amountBs: r.amount_bs,
     timestamp: String(r.timestamp),
   });
+}
+
+/** Records of an already parsed JSON body (e.g. an HTTP request). */
+export function fundingEventsFromJson(data: unknown): ParsedFundingEvents {
+  return mapRecords(data, toFundingEvent);
 }
 
 export function parseFundingEvents(json: string): ParsedFundingEvents {

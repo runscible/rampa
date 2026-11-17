@@ -1,5 +1,5 @@
 import { createPayoutEvent, PayoutEvent } from '../../domain/payouts/payout-event';
-import { JsonRecordsResult, parseJsonRecords, requireFields } from './json-records';
+import { JsonRecordsResult, mapRecords, parseJsonRecords, requireFields } from './json-records';
 
 export type ParsedPayoutEvents = JsonRecordsResult<PayoutEvent>;
 
@@ -15,6 +15,11 @@ function toPayoutEvent(record: unknown): PayoutEvent {
     amountBs: r.amount_bs,
     timestamp: String(r.timestamp),
   });
+}
+
+/** Records of an already parsed JSON body (e.g. an HTTP request). */
+export function payoutEventsFromJson(data: unknown): ParsedPayoutEvents {
+  return mapRecords(data, toPayoutEvent);
 }
 
 export function parsePayoutEvents(json: string): ParsedPayoutEvents {

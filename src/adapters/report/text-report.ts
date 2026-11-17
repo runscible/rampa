@@ -1,7 +1,11 @@
 import { Break, BreakSeverity } from '../../domain/breaks/break';
 import { ACCOUNT_CURRENCY, accountBalances, assertBalanced } from '../../domain/ledger/ledger';
 import { formatInZone, Instant } from '../../domain/shared/time';
-import { FileReconcileResult } from '../files/reconcile-files';
+import { ReconcileResult } from '../../application/reconcile';
+import { SourceParseError } from '../files/reconcile-files';
+
+/** What a report is made from: the reconciliation, plus the rows of the input files that could not be read (if any). */
+export type ReportInput = ReconcileResult & { parseErrors?: SourceParseError[] };
 
 export interface ReportOptions {
   /** Report instant, as configured (ISO-8601 with offset). */
@@ -27,7 +31,8 @@ const SEVERITIES: Array<{ severity: BreakSeverity; singular: string; plural: str
 const pad = (text: string, width: number): string => text.padEnd(width);
 const money = (amount: { toString(): string }, currency: string): string => `${formatAmount(amount.toString())} ${currency}`;
 
-export function renderTextReport(result: FileReconcileResult, options: ReportOptions): string {
+export function renderTextReport(result: ReportInput, options: ReportOptions): string {
+  const parseErrors = result.parseErrors ?? [];
   const local = (instant: Instant): string => formatInZone(instant, options.timeZone).slice(0, 19).replace('T', ' ');
   const lines: string[] = [];
   const section = (title: string) => lines.push('', title);
@@ -70,8 +75,8 @@ export function renderTextReport(result: FileReconcileResult, options: ReportOpt
   }
   lines.push(`  Ledger balanced: ${balanced ? 'yes' : 'NO'} (${result.ledger.length} entries)`);
 
-  section(`INPUT PROBLEMS (${result.parseErrors.length === 0 ? 'none' : result.parseErrors.length})`);
-  for (const e of result.parseErrors) lines.push(`  ${pad(`${e.file}:${e.line}`, 30)}${e.reason}`);
+  section(`INPUT PROBLEMS (${parseErrors.length === 0 ? 'none' : parseErrors.length})`);
+  for (const e of parseErrors) lines.push(`  ${pad(`${e.file}:${e.line}`, 30)}${e.reason}`);
 
   return `${lines.join('\n')}\n`;
 }
