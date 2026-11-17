@@ -6,7 +6,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "start": "ts-node src/main.ts",
-    "reconcile": "ts-node src/cli.ts",
     "test": "jest",
     "test:watch": "jest --watch"
   },

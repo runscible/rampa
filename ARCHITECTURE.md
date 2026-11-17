@@ -14,7 +14,7 @@ src/
     breaks/        break model + rules (what does not reconcile)
   application/     use cases over domain objects (reconcile)
   adapters/files/  CSV/JSON parsers + file → use case facade
-  config/, app.module.ts, main.ts, cli.ts   composition root
+  config/, app.module.ts, main.ts   composition root
 test/{domain,application,adapters}/, test/architecture.spec.ts
 ```
 
