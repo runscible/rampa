@@ -1,0 +1,136 @@
+# Rampa payments reconciliation
+
+A small Nest.js service that reconciles a USDT → Bs payment flow. A partner prefunds in USDT, the local provider converts to Bs and holds the balance, and we pay Bolivian QR codes from it. The service ingests what each side reports, keeps a double-entry ledger, and tells you what does not add up.
+
+Design notes for contributors are in [`ARCHITECTURE.md`](ARCHITECTURE.md); the assignment is in [`BRIEF.md`](BRIEF.md).
+
+## Run it
+
+```bash
+npm install
+npm start          # http://localhost:3000  (PORT to change it)
+npm test           # unit + e2e tests
+```
+
+State is **in memory** for now (restarting the server forgets everything). SQLite is the next step.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `RECON_CUTOFF` | `2026-10-05T20:00:00-04:00` | Report state as of this instant |
+| `RECON_TIME_ZONE` | `America/La_Paz` | Zone used to display instants |
+| `RECON_FUNDING_SLA_MINUTES` | `10` | Max delay between a deposit and its funding webhook |
+| `RECON_PAYOUT_SLA_MINUTES` | `15` | Max wait between a pay-out CONFIRM and its terminal event |
+| `RECON_MAX_SPREAD` | `0.005` | Max provider spread vs. the reference rate (0.5%) |
+
+## API
+
+| Method and path | Body | Answer |
+|---|---|---|
+| `POST /ingest/deposits` | `text/csv` (`usdt_deposits.csv`) | `{received, stored, ignored}` |
+| `POST /ingest/rates` | `text/csv` (`reference_rates.csv`) | same |
+| `POST /ingest/funding-webhooks` | JSON array (`funding_webhooks.json`) | same |
+| `POST /ingest/payout-events` | JSON array (`payout_events.json`) | same |
+| `GET /balances` | | the four balances (plus converted and funded) |
+| `GET /breaks` | | breaks report, instants in UTC and local time |
+| `GET /ledger` | | every journal entry |
+| `GET /report` | | everything: JSON, or plain text with `Accept: text/plain` |
+
+The `GET`s take an optional `?cutoff=<ISO-8601 with offset>` (encode `+` as `%2B`). The default is `RECON_CUTOFF`.
+
+Errors: `422` with the offending lines when any record of an ingest request is invalid (**nothing is stored**, fix the file and send it again); `400` for JSON that does not parse or a bad `cutoff`; `415` when a CSV feed is not sent as `text/csv`.
+
+```bash
+curl -X POST localhost:3000/ingest/deposits         -H 'Content-Type: text/csv'         --data-binary @data/usdt_deposits.csv
+curl -X POST localhost:3000/ingest/rates            -H 'Content-Type: text/csv'         --data-binary @data/reference_rates.csv
+curl -X POST localhost:3000/ingest/funding-webhooks -H 'Content-Type: application/json' --data-binary @data/funding_webhooks.json
+curl -X POST localhost:3000/ingest/payout-events    -H 'Content-Type: application/json' --data-binary @data/payout_events.json
+curl localhost:3000/balances
+curl -H 'Accept: text/plain' localhost:3000/report
+```
+
+## Results with the provided data (cutoff 20:00, La Paz)
+
+| Balance | Value |
+|---|---|
+| USDT sent, not yet converted | 1,500.00 |
+| USDT converted | 14,500.00 |
+| Bs funded | 141,626.50 |
+| Bs available at the provider | 12,120.95 |
+| Bs paid out | 129,505.55 |
+| Bs in pay-outs not final | 3,900.00 |
+
+Breaks: `fw_003` spread 1.20% · `fw_004` webhook 145 min late · 1,500 USDT deposit without webhook · pay-out `P018` stuck 49 min · Bs balance negative 16:26–17:10 (max shortfall 2,480.55) · `P005` reversed (review) · info: `pe_0029` delivered twice, `P009` preview never confirmed.
+
+## Ledger model
+
+Every entry sums to zero in each currency; each account holds one currency. Debit is positive.
+
+| Account | Currency | Holds |
+|---|---|---|
+| `USDT_WALLET_PENDING` | USDT | USDT received, not yet converted |
+| `USDT_CONVERTED` | USDT | USDT the provider converted |
+| `PARTNER_PREFUND` | USDT | What the partner funded (credit side of deposits) |
+| `BS_PROVIDER_BALANCE` | Bs | Our Bs balance at the provider |
+| `BS_PAID_OUT` | Bs | Bs paid out through COMPLETED pay-outs |
+| `FX_CLEARING` | Bs | Bs side of the conversion |
+
+| Event | Entry |
+|---|---|
+| Deposit | Dr `USDT_WALLET_PENDING` / Cr `PARTNER_PREFUND` |
+| Funding webhook | USDT: Dr `USDT_CONVERTED` / Cr `USDT_WALLET_PENDING` · Bs: Dr `BS_PROVIDER_BALANCE` / Cr `FX_CLEARING` (using the webhook's `amount_bs`) |
+| Pay-out COMPLETED | Dr `BS_PAID_OUT` / Cr `BS_PROVIDER_BALANCE` |
+| Pay-out REVERSED | The exact inverse of COMPLETED |
+| PREVIEW, CONFIRM, FAILED | No entry (the provider reserves nothing before COMPLETED) |
+
+"Bs in pay-outs not final" is not in the ledger: it is the sum of pay-outs that are CONFIRMED with no terminal event.
+
+## Duplicates and out-of-order events
+
+- **The service keeps a log of deliveries** (in arrival order, tagged by request) and rebuilds every report from it. Nothing is rewritten.
+- **Sending the same data again changes nothing.** A delivery identical to one from an earlier request is dropped. Ids are `tx_hash`, `event_id` and the rate's timestamp.
+- **A repeat inside one request is kept and reported** (INFO `DUPLICATE_DELIVERY`, e.g. `pe_0029`). A repeat with different content is a `EVENT_CONFLICT` break and the first delivery wins.
+- **Order does not matter.** Feeds can arrive in any order and events in any order within a feed. Pay-out events are replayed sorted by instant, then lifecycle step (PREVIEW < CONFIRM < COMPLETED < FAILED < REVERSED), then event id. At the same instant, deposits are applied before fundings, and fundings before pay-outs.
+- **Pay-outs follow a state machine:** PREVIEW → CONFIRM → COMPLETED | FAILED, and COMPLETED → REVERSED. An event that makes no sense (a second COMPLETED with another id, REVERSED without COMPLETED) is rejected and reported, so a pay-out is never debited twice.
+
+## What counts as a break
+
+| Severity | Type | When |
+|---|---|---|
+| BREAK | `SPREAD_EXCEEDED` | Provider rate is more than 0.5% below the reference rate in force when the webhook was sent (latest rate at or before its timestamp). Exactly 0.5% is fine. |
+| BREAK | `LATE_FUNDING_WEBHOOK` | Webhook more than 10 min after its deposit |
+| BREAK | `DEPOSIT_WITHOUT_WEBHOOK` | Deposit with no webhook, older than 10 min at the cutoff |
+| BREAK | `UNKNOWN_DEPOSIT` | Webhook for a `tx_hash` that was never deposited |
+| BREAK | `AMOUNT_MISMATCH` | Webhook `amount_usdt` differs from the deposit |
+| BREAK | `DOUBLE_FUNDING` | Two different webhooks for one deposit (both are applied) |
+| BREAK | `STUCK_PAYOUT` | CONFIRMED more than 15 min before the cutoff, no terminal event |
+| BREAK | `CONFIRM_AMOUNT_MISMATCH` | CONFIRM amount differs from PREVIEW |
+| BREAK | `REVERSAL_WITHOUT_COMPLETED` | REVERSED for a pay-out that never completed (not applied) |
+| BREAK | `ILLEGAL_TRANSITION` | Any other event that breaks the pay-out lifecycle (not applied) |
+| BREAK | `NEGATIVE_BALANCE` | Bs balance at the provider below zero; one break per interval with the maximum shortfall |
+| BREAK | `EVENT_CONFLICT` | Same id delivered again with different content |
+| REVIEW | `PAYOUT_REVERSED` | A completed pay-out was reversed |
+| REVIEW | `IRREGULAR_PAYOUT_EVENT` | Applied, but a step was skipped (COMPLETED without CONFIRM) or a REVERSED amount differs from the COMPLETED one |
+| REVIEW | `MISSING_REFERENCE_RATE` | No rate at or before the webhook: the spread cannot be checked |
+| INFO | `DUPLICATE_DELIVERY` | Same id and content twice in one request |
+| INFO | `UNCONFIRMED_PREVIEW` | PREVIEW never confirmed (no financial effect) |
+
+Limits are inclusive (a delay of exactly 10 minutes is not a break).
+
+## Assumptions
+
+- **A negative Bs balance can happen.** The provider debits at COMPLETED and reserves nothing, so a pay-out can complete without funds. The ledger records it as is and it shows up as a break.
+- **Spread** is `(reference − provider rate) / reference`. A rate better than the reference is not a break.
+- **COMPLETED without CONFIRM is applied.** The money moved, so hiding it would overstate the balance; it is flagged for review instead. The same goes for a REVERSED with a different amount: the provider's amount is used and flagged.
+- **A webhook that arrives after the cutoff does not count** for a deposit "without webhook": the report is as of the cutoff.
+- **Timestamps must carry an explicit offset**; one without it is ambiguous and is rejected. Amounts have at most 2 decimals and rates at most 6; extra decimals are rejected, not rounded.
+- **Everything after the cutoff is ignored**, including repeats.
+
+## What I would change for production
+
+- A real database (Postgres) with idempotent, transactional ingestion: today a request reads the log and then appends, which is not atomic under concurrent requests.
+- Authenticate callers and verify webhook signatures; rate limits and larger JSON body limits.
+- Store the report breaks and notify (alerts on negative balance and stuck pay-outs) instead of only answering on demand; track break lifecycle (open, acknowledged, resolved).
+- Page and stream the ledger; ingest files in chunks.
+- Take reference rates from a market data source, with their own SLA; the hourly CSV is a stand-in.
+- Multi-day cutoffs, closing balances carried across days, and per-partner accounts.
+- Observability: structured logs, metrics per feed and per break type, tracing across ingestion and report.
