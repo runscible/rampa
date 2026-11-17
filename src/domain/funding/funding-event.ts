@@ -2,6 +2,7 @@ import { RateTable } from '../rates/rate-table';
 import { D } from '../shared/decimal';
 import { Money } from '../shared/money';
 import { Instant, parseInstant } from '../shared/time';
+import { requireNonEmpty } from '../shared/validation';
 
 /** The provider confirms that a deposit was converted to Bs. */
 export interface FundingEvent {
@@ -24,21 +25,14 @@ export interface RawFundingEvent {
   timestamp: string;
 }
 
-function positive(label: string, amount: Money): Money {
-  if (amount.isNegative() || amount.isZero()) throw new RangeError(`${label} must be positive`);
-  return amount;
-}
-
 /** Builds a FundingEvent enforcing its invariants. Throws with a readable reason on bad data. */
 export function createFundingEvent(raw: RawFundingEvent): FundingEvent {
-  if (raw.eventId === '') throw new TypeError('event_id is empty');
-  if (raw.depositTxHash === '') throw new TypeError('deposit_tx_hash is empty');
   return {
-    eventId: raw.eventId,
-    depositTxHash: raw.depositTxHash,
-    amountUsdt: positive('amount_usdt', Money.parse('USDT', raw.amountUsdt)),
+    eventId: requireNonEmpty('event_id', raw.eventId),
+    depositTxHash: requireNonEmpty('deposit_tx_hash', raw.depositTxHash),
+    amountUsdt: Money.parse('USDT', raw.amountUsdt).requirePositive('amount_usdt'),
     rate: RateTable.parseRate(String(raw.rate)),
-    amountBs: positive('amount_bs', Money.parse('BS', raw.amountBs)),
+    amountBs: Money.parse('BS', raw.amountBs).requirePositive('amount_bs'),
     at: parseInstant(raw.timestamp),
   };
 }

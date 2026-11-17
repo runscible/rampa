@@ -62,6 +62,12 @@ export class Money {
     return this.value.isZero();
   }
 
+  /** Returns this amount, or throws naming the source field when it is zero or negative. */
+  requirePositive(label: string): Money {
+    if (this.isNegative() || this.isZero()) throw new RangeError(`${label} must be positive`);
+    return this;
+  }
+
   equals(other: Money): boolean {
     return this.currency === other.currency && this.value.equals(other.value);
   }

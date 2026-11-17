@@ -1,5 +1,6 @@
 import { Money } from '../shared/money';
 import { Instant, parseInstant } from '../shared/time';
+import { requireNonEmpty } from '../shared/validation';
 
 export const PAYOUT_EVENT_TYPES = ['PREVIEW', 'CONFIRM', 'COMPLETED', 'FAILED', 'REVERSED'] as const;
 export type PayoutEventType = (typeof PAYOUT_EVENT_TYPES)[number];
@@ -28,12 +29,14 @@ function isPayoutEventType(type: string): type is PayoutEventType {
 
 /** Builds a PayoutEvent enforcing its invariants. Throws with a readable reason on bad data. */
 export function createPayoutEvent(raw: RawPayoutEvent): PayoutEvent {
-  if (raw.eventId === '') throw new TypeError('event_id is empty');
-  if (raw.payoutId === '') throw new TypeError('payout_id is empty');
   if (!isPayoutEventType(raw.type)) throw new TypeError(`Unknown payout event type: ${JSON.stringify(raw.type)}`);
-  const amountBs = Money.parse('BS', raw.amountBs);
-  if (amountBs.isNegative() || amountBs.isZero()) throw new RangeError('amount_bs must be positive');
-  return { eventId: raw.eventId, payoutId: raw.payoutId, type: raw.type, amountBs, at: parseInstant(raw.timestamp) };
+  return {
+    eventId: requireNonEmpty('event_id', raw.eventId),
+    payoutId: requireNonEmpty('payout_id', raw.payoutId),
+    type: raw.type,
+    amountBs: Money.parse('BS', raw.amountBs).requirePositive('amount_bs'),
+    at: parseInstant(raw.timestamp),
+  };
 }
 
 /** Canonical content of an event: two deliveries are the same iff their fingerprints match. */

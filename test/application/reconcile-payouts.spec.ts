@@ -63,7 +63,7 @@ describe('reconcile with payout lifecycle', () => {
     const events = lifecycle('P1', 2500, ['09:00', '09:01'], ['COMPLETED', '09:05']);
     const r = run([...events, events[2]]);
     expect(r.balances.bsPaidOut.toString()).toBe('2500.00');
-    expect(r.ingestion.duplicateEventIds).toEqual(['P1-COMPLETED']);
+    expect(r.ingestion.duplicateIds).toEqual(['P1-COMPLETED']);
   });
 
   it('a second COMPLETED with a different id is not debited and is reported as rejected', () => {
@@ -84,7 +84,25 @@ describe('reconcile with payout lifecycle', () => {
     const events = lifecycle('P1', 2500, ['09:00', '09:01'], ['COMPLETED', '09:05']);
     const r = run([...events, ev('P1-COMPLETED', 'P1', 'COMPLETED', 9999, '09:05')]);
     expect(r.balances.bsPaidOut.toString()).toBe('2500.00');
-    expect(r.ingestion.conflictingEventIds).toEqual(['P1-COMPLETED']);
+    expect(r.ingestion.conflictingIds).toEqual(['P1-COMPLETED']);
+  });
+
+  it('orders same-instant entries by lifecycle, not by id (COMPLETED before its REVERSED)', () => {
+    const events = [
+      ev('p-prev', 'P1', 'PREVIEW', 1000, '09:00'),
+      ev('p-conf', 'P1', 'CONFIRM', 1000, '09:01'),
+      ev('z-done', 'P1', 'COMPLETED', 1000, '10:00'),
+      ev('a-rev', 'P1', 'REVERSED', 1000, '10:00'),
+    ];
+    expect(run(events).ledger.map((e) => e.id).filter((id) => id.startsWith('payout:'))).toEqual(['payout:z-done', 'payout:a-rev']);
+  });
+
+  it('orders a funding before a payout at the same instant', () => {
+    const sameInstant = createFundingEvent({ eventId: 'fw_9', depositTxHash: '0x9', amountUsdt: 1, rate: 10, amountBs: 10, timestamp: at('10:00') });
+    const events = [...lifecycle('P1', 1000, ['09:00', '09:01'], ['COMPLETED', '10:00'])];
+    const r = reconcile({ deposits: [], fundingEvents: [sameInstant], payoutEvents: events }, CONFIG);
+    const ids = r.ledger.filter((e) => e.at.getTime() === sameInstant.at.getTime()).map((e) => e.id);
+    expect(ids).toEqual(['funding:fw_9', 'payout:P1-COMPLETED']);
   });
 
   it('gives the same result for any delivery order (permutation)', () => {

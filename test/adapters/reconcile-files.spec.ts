@@ -58,7 +58,7 @@ describe('reconcileFiles: deposits only (slice 1)', () => {
     expect(result.balances.bsInFlight.toString()).toBe('3900.00');
     expect(result.ingestion.rejectedPayoutEvents).toEqual([]);
     expect(result.ingestion.irregularPayoutEvents).toEqual([]);
-    expect(result.ingestion.duplicateEventIds).toEqual(['pe_0029']);
+    expect(result.ingestion.duplicateIds).toEqual(['pe_0029']);
     expect(result.balances.usdtUnconverted.toString()).toBe('1500.00');
     expect(result.balances.usdtConverted.toString()).toBe('14500.00');
     expect(result.balances.bsFunded.toString()).toBe('141626.50');

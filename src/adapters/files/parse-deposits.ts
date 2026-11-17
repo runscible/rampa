@@ -6,7 +6,7 @@ export interface ParsedDeposits {
   errors: ParseError[];
 }
 
-const REQUIRED = ['tx_hash', 'amount_usdt', 'timestamp'];
+const DEPOSIT_COLUMNS = ['tx_hash', 'amount_usdt', 'timestamp'];
 
 /** Maps a CSV row to the domain: column names stay here, the rules live in createDeposit. */
 function toDeposit({ values }: CsvRow): Deposit {
@@ -14,5 +14,5 @@ function toDeposit({ values }: CsvRow): Deposit {
 }
 
 export function parseDeposits(csv: string): ParsedDeposits {
-  return parseTable(csv, REQUIRED, toDeposit);
+  return parseTable(csv, DEPOSIT_COLUMNS, toDeposit);
 }

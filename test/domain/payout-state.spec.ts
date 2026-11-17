@@ -34,7 +34,7 @@ describe('replayPayouts', () => {
     const r = replayPayouts([ev('P1', 'PREVIEW', '09:00:00'), ev('P1', 'CONFIRM', '09:01:00'), ev('P1', 'COMPLETED', '09:05:00')]);
     expect(r.rejected).toEqual([]);
     expect(r.accepted).toHaveLength(3);
-    expect(r.payouts).toEqual([{ payoutId: 'P1', state: 'COMPLETED', amountBs: expect.anything() }]);
+    expect(r.payouts).toEqual([expect.objectContaining({ payoutId: 'P1', state: 'COMPLETED' })]);
   });
 
   it('does not depend on delivery order', () => {
@@ -78,6 +78,31 @@ describe('replayPayouts', () => {
 
   it('does not flag a regular lifecycle', () => {
     const r = replayPayouts([ev('P1', 'PREVIEW', '09:00:00'), ev('P1', 'CONFIRM', '09:01:00'), ev('P1', 'COMPLETED', '09:05:00')]);
+    expect(r.irregular).toEqual([]);
+  });
+
+  it('keeps the PREVIEW amount and the CONFIRM instant for later checks', () => {
+    const r = replayPayouts([ev('P1', 'PREVIEW', '09:00:00', 100), ev('P1', 'CONFIRM', '09:01:00', 150)]);
+    const [p] = r.payouts;
+    expect(p.previewAmountBs?.toString()).toBe('100.00');
+    expect(p.amountBs.toString()).toBe('150.00');
+    expect(p.confirmedAt?.toISOString()).toBe('2026-10-05T13:01:00.000Z');
+  });
+
+  it('applies a REVERSED whose amount differs from the COMPLETED one but flags it', () => {
+    const r = replayPayouts([
+      ev('P1', 'PREVIEW', '09:00:00', 100),
+      ev('P1', 'CONFIRM', '09:01:00', 100),
+      ev('P1', 'COMPLETED', '09:05:00', 100),
+      ev('P1', 'REVERSED', '10:00:00', 60, 'rev'),
+    ]);
+    expect(r.rejected).toEqual([]);
+    expect(r.accepted.map((e) => e.eventId)).toContain('rev');
+    expect(r.irregular).toEqual([expect.objectContaining({ event: expect.objectContaining({ eventId: 'rev' }), reason: expect.stringMatching(/REVERSED.*60\.00.*100\.00/) })]);
+  });
+
+  it('does not flag a REVERSED with the same amount', () => {
+    const r = replayPayouts([ev('P1', 'PREVIEW', '09:00:00'), ev('P1', 'CONFIRM', '09:01:00'), ev('P1', 'COMPLETED', '09:05:00'), ev('P1', 'REVERSED', '10:00:00')]);
     expect(r.irregular).toEqual([]);
   });
 

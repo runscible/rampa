@@ -3,11 +3,11 @@ import { JsonRecordsResult, parseJsonRecords, requireFields } from './json-recor
 
 export type ParsedPayoutEvents = JsonRecordsResult<PayoutEvent>;
 
-const FIELDS = ['event_id', 'payout_id', 'type', 'amount_bs', 'timestamp'] as const;
+const PAYOUT_FIELDS = ['event_id', 'payout_id', 'type', 'amount_bs', 'timestamp'] as const;
 
 /** Maps one JSON record to the domain: field names stay here, the rules live in createPayoutEvent. */
 function toPayoutEvent(record: unknown): PayoutEvent {
-  const r = requireFields(record, FIELDS);
+  const r = requireFields(record, PAYOUT_FIELDS);
   return createPayoutEvent({
     eventId: String(r.event_id),
     payoutId: String(r.payout_id),

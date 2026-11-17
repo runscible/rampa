@@ -1,6 +1,6 @@
 import { Deposit } from '../deposits/deposit';
 import { FundingEvent } from '../funding/funding-event';
-import { PayoutEvent } from '../payouts/payout-event';
+import { PayoutEvent, PayoutEventType } from '../payouts/payout-event';
 import { JournalEntry } from './ledger';
 
 /** USDT arrives at the provider's wallet: Dr USDT_WALLET_PENDING / Cr PARTNER_PREFUND. */
@@ -32,6 +32,9 @@ export function postFunding(event: FundingEvent): JournalEntry {
   };
 }
 
+/** How much each event type moves into BS_PAID_OUT: COMPLETED pays out, REVERSED returns the funds. Absent = no movement. */
+const PAID_OUT_SIGN: Partial<Record<PayoutEventType, 1 | -1>> = { COMPLETED: 1, REVERSED: -1 };
+
 /**
  * The provider debits the Bs balance when a pay-out is COMPLETED (Dr BS_PAID_OUT / Cr BS_PROVIDER_BALANCE)
  * and returns the funds when it is REVERSED (the exact inverse).
@@ -39,8 +42,9 @@ export function postFunding(event: FundingEvent): JournalEntry {
  * Callers must only post events accepted by the payout state machine.
  */
 export function postPayout(event: PayoutEvent): JournalEntry | null {
-  if (event.type !== 'COMPLETED' && event.type !== 'REVERSED') return null;
-  const paid = event.type === 'COMPLETED' ? event.amountBs : event.amountBs.negate();
+  const sign = PAID_OUT_SIGN[event.type];
+  if (sign === undefined) return null;
+  const paid = sign === 1 ? event.amountBs : event.amountBs.negate();
   return {
     id: `payout:${event.eventId}`,
     at: event.at,

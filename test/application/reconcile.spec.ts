@@ -18,4 +18,19 @@ describe('reconcile (use case, domain objects only)', () => {
     );
     expect(result.balances.usdtUnconverted.toString()).toBe('100.00');
   });
+
+  it('is idempotent for deposits: the same tx_hash delivered twice is counted once and reported', () => {
+    const d = deposit('0x1', '100.00', '2026-10-05T09:00:00-04:00');
+    const r = reconcile({ deposits: [d, d], fundingEvents: [], payoutEvents: [] }, CONFIG);
+    expect(r.balances.usdtUnconverted.toString()).toBe('100.00');
+    expect(r.ingestion.duplicateIds).toEqual(['0x1']);
+  });
+
+  it('a tx_hash repeated with a different amount keeps the first and reports a conflict', () => {
+    const first = deposit('0x1', '100.00', '2026-10-05T09:00:00-04:00');
+    const other = deposit('0x1', '999.00', '2026-10-05T09:00:00-04:00');
+    const r = reconcile({ deposits: [first, other], fundingEvents: [], payoutEvents: [] }, CONFIG);
+    expect(r.balances.usdtUnconverted.toString()).toBe('100.00');
+    expect(r.ingestion.conflictingIds).toEqual(['0x1']);
+  });
 });

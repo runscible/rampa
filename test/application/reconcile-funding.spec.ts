@@ -38,13 +38,13 @@ describe('reconcile with funding events', () => {
   it('is idempotent: the same event delivered twice counts once and is reported', () => {
     const r = reconcile({ deposits, fundingEvents: [funding(), funding()], payoutEvents: [] }, CONFIG);
     expect(r.balances.bsFunded.toString()).toBe('48972.50');
-    expect(r.ingestion.duplicateEventIds).toEqual(['fw_001']);
+    expect(r.ingestion.duplicateIds).toEqual(['fw_001']);
   });
 
   it('keeps the first when the same id arrives with different content, and reports the conflict', () => {
     const r = reconcile({ deposits, fundingEvents: [funding(), funding({ amountBs: 50000 })], payoutEvents: [] }, CONFIG);
     expect(r.balances.bsFunded.toString()).toBe('48972.50');
-    expect(r.ingestion.conflictingEventIds).toEqual(['fw_001']);
+    expect(r.ingestion.conflictingIds).toEqual(['fw_001']);
   });
 
   it('gives the same result for any input order', () => {

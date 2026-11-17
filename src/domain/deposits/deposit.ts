@@ -1,5 +1,6 @@
 import { Money } from '../shared/money';
 import { Instant, parseInstant } from '../shared/time';
+import { requireNonEmpty } from '../shared/validation';
 
 /** An on-chain USDT deposit received by the provider's wallet. */
 export interface Deposit {
@@ -17,8 +18,14 @@ export interface RawDeposit {
 
 /** Builds a Deposit enforcing its invariants. Throws with a readable reason on bad data. */
 export function createDeposit(raw: RawDeposit): Deposit {
-  if (raw.txHash === '') throw new TypeError('tx_hash is empty');
-  const amount = Money.parse('USDT', raw.amount);
-  if (amount.isNegative() || amount.isZero()) throw new RangeError('amount_usdt must be positive');
-  return { txHash: raw.txHash, amount, at: parseInstant(raw.timestamp) };
+  return {
+    txHash: requireNonEmpty('tx_hash', raw.txHash),
+    amount: Money.parse('USDT', raw.amount).requirePositive('amount_usdt'),
+    at: parseInstant(raw.timestamp),
+  };
+}
+
+/** Canonical content of a deposit: two deliveries of the same tx_hash are the same iff their fingerprints match. */
+export function fingerprintDeposit(d: Deposit): string {
+  return [d.amount, d.at.toISOString()].join('|');
 }

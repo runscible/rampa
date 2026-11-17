@@ -1,4 +1,5 @@
 import { Money } from '../shared/money';
+import { Instant } from '../shared/time';
 import { PAYOUT_EVENT_TYPES, PayoutEvent, PayoutEventType } from './payout-event';
 
 export type PayoutState = 'PREVIEWED' | 'CONFIRMED' | 'COMPLETED' | 'FAILED' | 'REVERSED';
@@ -29,13 +30,15 @@ export interface FlaggedPayoutEvent {
   reason: string;
 }
 
-export type RejectedPayoutEvent = FlaggedPayoutEvent;
-
 export interface PayoutSnapshot {
   payoutId: string;
   state: PayoutState;
   /** Amount of the last accepted event. */
   amountBs: Money;
+  /** Amount announced at PREVIEW, kept to compare against the CONFIRM amount. */
+  previewAmountBs?: Money;
+  /** When the pay-out was confirmed, kept to measure how long it has been waiting for a terminal event. */
+  confirmedAt?: Instant;
 }
 
 export interface ReplayResult {
@@ -44,7 +47,7 @@ export interface ReplayResult {
   /** Accepted events that skipped a regular step (e.g. COMPLETED without CONFIRM): applied, but need review. */
   irregular: FlaggedPayoutEvent[];
   /** Events that arrived in a state where they make no sense (never applied, needs review). */
-  rejected: RejectedPayoutEvent[];
+  rejected: FlaggedPayoutEvent[];
   /** Final state of every payout, ordered by payout id. */
   payouts: PayoutSnapshot[];
 }
@@ -56,10 +59,23 @@ function byLifecycle(a: PayoutEvent, b: PayoutEvent): number {
   return a.at.getTime() - b.at.getTime() || typeRank(a.type) - typeRank(b.type) || a.eventId.localeCompare(b.eventId);
 }
 
+/** Reasons why an accepted event deviates from a regular lifecycle (empty when it is regular). */
+function irregularities(event: PayoutEvent, current: PayoutSnapshot | undefined): string[] {
+  const previousState = current?.state ?? 'NONE';
+  const expectedPrevious = REGULAR_FROM[event.type];
+  const skippedRegularStep = expectedPrevious !== undefined && previousState !== expectedPrevious;
+  const reversalAmountDiffers = event.type === 'REVERSED' && current !== undefined && !event.amountBs.equals(current.amountBs);
+
+  const reasons: string[] = [];
+  if (skippedRegularStep) reasons.push(`${event.type} without ${expectedPrevious} (was ${current?.state ?? 'no previous event'})`);
+  if (reversalAmountDiffers) reasons.push(`REVERSED amount ${event.amountBs} differs from COMPLETED amount ${current.amountBs}`);
+  return reasons;
+}
+
 /** Replays events through the state machine. Illegal transitions are rejected, so e.g. a payout is never debited twice. */
 export function replayPayouts(events: PayoutEvent[]): ReplayResult {
   const accepted: PayoutEvent[] = [];
-  const rejected: RejectedPayoutEvent[] = [];
+  const rejected: FlaggedPayoutEvent[] = [];
   const irregular: FlaggedPayoutEvent[] = [];
   const payouts = new Map<string, PayoutSnapshot>();
 
@@ -70,12 +86,15 @@ export function replayPayouts(events: PayoutEvent[]): ReplayResult {
       rejected.push({ event, reason: `${event.type} not allowed after ${current?.state ?? 'no previous event'}` });
       continue;
     }
-    const expected = REGULAR_FROM[event.type];
-    if (expected !== undefined && (current?.state ?? 'NONE') !== expected) {
-      irregular.push({ event, reason: `${event.type} without ${expected} (was ${current?.state ?? 'no previous event'})` });
-    }
+    for (const reason of irregularities(event, current)) irregular.push({ event, reason });
     accepted.push(event);
-    payouts.set(event.payoutId, { payoutId: event.payoutId, state: next, amountBs: event.amountBs });
+    payouts.set(event.payoutId, {
+      payoutId: event.payoutId,
+      state: next,
+      amountBs: event.amountBs,
+      previewAmountBs: event.type === 'PREVIEW' ? event.amountBs : current?.previewAmountBs,
+      confirmedAt: event.type === 'CONFIRM' ? event.at : current?.confirmedAt,
+    });
   }
 
   return { accepted, irregular, rejected, payouts: [...payouts.values()].sort((a, b) => a.payoutId.localeCompare(b.payoutId)) };

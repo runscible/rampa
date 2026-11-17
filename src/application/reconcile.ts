@@ -1,9 +1,9 @@
-import { Deposit } from '../domain/deposits/deposit';
+import { Deposit, fingerprintDeposit } from '../domain/deposits/deposit';
 import { fingerprintFundingEvent, FundingEvent } from '../domain/funding/funding-event';
 import { accountBalances, assertBalanced, JournalEntry } from '../domain/ledger/ledger';
 import { postDeposit, postFunding, postPayout } from '../domain/ledger/posting';
 import { fingerprintPayoutEvent, PayoutEvent } from '../domain/payouts/payout-event';
-import { FlaggedPayoutEvent, RejectedPayoutEvent, replayPayouts, totalInFlight } from '../domain/payouts/payout-state';
+import { FlaggedPayoutEvent, replayPayouts, totalInFlight } from '../domain/payouts/payout-state';
 import { dedupeById } from '../domain/shared/dedupe';
 import { Money } from '../domain/shared/money';
 import { parseInstant } from '../domain/shared/time';
@@ -35,14 +35,14 @@ export interface Balances {
 }
 
 export interface IngestionNotes {
-  /** Events delivered again with identical content (ignored). */
-  duplicateEventIds: string[];
-  /** Events delivered again with different content (first one kept; needs review). */
-  conflictingEventIds: string[];
+  /** Ids (tx_hash or event_id) delivered again with identical content (ignored). */
+  duplicateIds: string[];
+  /** Ids delivered again with different content (first one kept; needs review). */
+  conflictingIds: string[];
   /** Pay-out events applied although a regular step was skipped (e.g. COMPLETED without CONFIRM). */
   irregularPayoutEvents: FlaggedPayoutEvent[];
   /** Pay-out events that made an illegal state transition (never applied). */
-  rejectedPayoutEvents: RejectedPayoutEvent[];
+  rejectedPayoutEvents: FlaggedPayoutEvent[];
 }
 
 export interface ReconcileResult {
@@ -56,16 +56,26 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
   const cutoff = parseInstant(config.cutoff).getTime();
   const upToCutoff = <T extends { at: Date }>(item: T): boolean => item.at.getTime() <= cutoff;
 
+  const deposits = dedupeById(input.deposits, (d) => d.txHash, fingerprintDeposit);
   const funding = dedupeById(input.fundingEvents, (e) => e.eventId, fingerprintFundingEvent);
   const payouts = dedupeById(input.payoutEvents, (e) => e.eventId, fingerprintPayoutEvent);
   const lifecycle = replayPayouts(payouts.unique.filter(upToCutoff));
 
-  const ledger = [
-    ...input.deposits.filter(upToCutoff).map(postDeposit),
-    ...funding.unique.filter(upToCutoff).map(postFunding),
-    ...lifecycle.accepted.flatMap((e) => postPayout(e) ?? []),
-  ].sort((a, b) => a.at.getTime() - b.at.getTime() || a.id.localeCompare(b.id));
+  const byId = (a: JournalEntry, b: JournalEntry) => a.id.localeCompare(b.id);
+  const depositEntries = deposits.unique.filter(upToCutoff).map(postDeposit).sort(byId);
+  const fundingEntries = funding.unique.filter(upToCutoff).map(postFunding).sort(byId);
+  const payoutEntries = lifecycle.accepted.flatMap((e) => postPayout(e) ?? []); // already in lifecycle order
+
+  // Sorting by instant only is deliberate: the sort is stable, so entries at the same instant keep the order
+  // of this list: deposits, then fundings, then payouts (a funding is applied before a payout at the same time).
+  const ledger = [...depositEntries, ...fundingEntries, ...payoutEntries].sort((a, b) => a.at.getTime() - b.at.getTime());
   assertBalanced(ledger);
+
+  const collectIds = (kind: 'duplicates' | 'conflicts'): string[] => [
+    ...deposits[kind].map((d) => d.txHash),
+    ...funding[kind].map((e) => e.eventId),
+    ...payouts[kind].map((e) => e.eventId),
+  ];
 
   const accounts = accountBalances(ledger);
   return {
@@ -79,8 +89,8 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
     },
     ledger,
     ingestion: {
-      duplicateEventIds: [...funding.duplicates, ...payouts.duplicates].map((e) => e.eventId),
-      conflictingEventIds: [...funding.conflicts, ...payouts.conflicts].map((e) => e.eventId),
+      duplicateIds: collectIds('duplicates'),
+      conflictingIds: collectIds('conflicts'),
       irregularPayoutEvents: lifecycle.irregular,
       rejectedPayoutEvents: lifecycle.rejected,
     },
