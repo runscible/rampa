@@ -201,8 +201,10 @@ describe('break: NEGATIVE_BALANCE', () => {
     const [b] = negative(12000, refill);
     expect(b.severity).toBe('BREAK');
     expect(b.at.toISOString()).toBe('2026-10-05T14:00:00.000Z');
+    expect(b.until?.toISOString()).toBe('2026-10-05T15:00:00.000Z');
+    expect(b.subject).toBe('BS_PROVIDER_BALANCE');
+    expect(b.id).toBe('NEGATIVE_BALANCE:2026-10-05T14:00:00.000Z');
     expect(b.reason).toContain('2000.00');
-    expect(b.reason).toContain('2026-10-05T15:00:00.000Z');
   });
 
   it('a balance of exactly zero is not negative', () => {
@@ -210,7 +212,9 @@ describe('break: NEGATIVE_BALANCE', () => {
   });
 
   it('an interval still open at the cutoff says so', () => {
-    expect(negative(12000)[0].reason).toMatch(/still negative at the cutoff/);
+    const [b] = negative(12000);
+    expect(b.until).toBeUndefined();
+    expect(b.reason).toMatch(/still negative at the cutoff/);
   });
 
   it('entries at the same instant are netted before judging the balance', () => {

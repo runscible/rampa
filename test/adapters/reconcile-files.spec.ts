@@ -80,7 +80,7 @@ describe('reconcileFiles: deposits only (slice 1)', () => {
     const summary = result.breaks.map((b) => `${b.severity} ${b.type} ${b.subject}`);
     expect(summary).toEqual([
       'BREAK SPREAD_EXCEEDED fw_003',
-      'BREAK NEGATIVE_BALANCE 2026-10-05T20:26:00.000Z',
+      'BREAK NEGATIVE_BALANCE BS_PROVIDER_BALANCE',
       'BREAK LATE_FUNDING_WEBHOOK fw_004',
       'BREAK DEPOSIT_WITHOUT_WEBHOOK 0x12a750139ca2e4c14287bb6ed9ece9ee75b556a911f19f91c2f0d59ef40e7597',
       'BREAK STUCK_PAYOUT P018',
@@ -92,7 +92,8 @@ describe('reconcileFiles: deposits only (slice 1)', () => {
     expect(byType('SPREAD_EXCEEDED').reason).toContain('1.20%');
     expect(byType('LATE_FUNDING_WEBHOOK').reason).toContain('145 min');
     expect(byType('NEGATIVE_BALANCE').reason).toContain('2480.55');
-    expect(byType('NEGATIVE_BALANCE').reason).toContain('2026-10-05T21:10:00.000Z');
+    expect(byType('NEGATIVE_BALANCE').at.toISOString()).toBe('2026-10-05T20:26:00.000Z');
+    expect(byType('NEGATIVE_BALANCE').until?.toISOString()).toBe('2026-10-05T21:10:00.000Z');
     expect(byType('STUCK_PAYOUT').reason).toContain('49 min');
   });
 

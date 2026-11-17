@@ -36,10 +36,19 @@ export interface Break {
   reason: string;
   /** When the problem happened (used to order the report). */
   at: Instant;
+  /** End of the problem when it spans an interval; absent for point events and for intervals still open at the cutoff. */
+  until?: Instant;
 }
 
-export function createBreak(type: BreakType, subject: string, reason: string, at: Instant): Break {
-  return { id: `${type}:${subject}`, type, severity: SEVERITY[type], subject, reason, at };
+interface BreakExtras {
+  until?: Instant;
+  /** Overrides what the id is built from when the subject alone does not identify the break. */
+  idKey?: string;
+}
+
+export function createBreak(type: BreakType, subject: string, reason: string, at: Instant, extras: BreakExtras = {}): Break {
+  const base: Break = { id: `${type}:${extras.idKey ?? subject}`, type, severity: SEVERITY[type], subject, reason, at };
+  return extras.until === undefined ? base : { ...base, until: extras.until };
 }
 
 /** Limits the rules check against. Configurable; these are the provider's documented service levels. */

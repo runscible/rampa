@@ -28,9 +28,9 @@ const providerBalanceChange = (entries: JournalEntry[]): Money =>
     .reduce((sum, l) => sum.plus(l.amount), Money.zero('BS'));
 
 const describe = (interval: Interval, end: Instant | undefined): Break => {
-  const until = end ? `until ${end.toISOString()}` : 'and still negative at the cutoff';
-  const reason = `Provider Bs balance negative from ${interval.start.toISOString()} ${until}; maximum shortfall ${interval.lowest.negate()} Bs`;
-  return createBreak('NEGATIVE_BALANCE', interval.start.toISOString(), reason, interval.start);
+  const open = end === undefined ? ' and still negative at the cutoff' : '';
+  const reason = `Provider Bs balance below zero${open}; maximum shortfall ${interval.lowest.negate()} Bs`;
+  return createBreak('NEGATIVE_BALANCE', 'BS_PROVIDER_BALANCE', reason, interval.start, { idKey: interval.start.toISOString(), until: end });
 };
 
 /**
