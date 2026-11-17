@@ -1,7 +1,8 @@
 import { Deposit } from '../domain/deposits/deposit';
 import { fingerprintFundingEvent, FundingEvent } from '../domain/funding/funding-event';
 import { accountBalances, assertBalanced, JournalEntry } from '../domain/ledger/ledger';
-import { postDeposit, postFunding } from '../domain/ledger/posting';
+import { postDeposit, postFunding, postPayout } from '../domain/ledger/posting';
+import { fingerprintPayoutEvent, PayoutEvent } from '../domain/payouts/payout-event';
 import { dedupeById } from '../domain/shared/dedupe';
 import { Money } from '../domain/shared/money';
 import { parseInstant } from '../domain/shared/time';
@@ -9,6 +10,7 @@ import { parseInstant } from '../domain/shared/time';
 export interface ReconcileInput {
   deposits: Deposit[];
   fundingEvents: FundingEvent[];
+  payoutEvents: PayoutEvent[];
 }
 
 export interface ReconcileConfig {
@@ -23,12 +25,16 @@ export interface Balances {
   usdtConverted: Money;
   /** Total Bs credited by funding events. */
   bsFunded: Money;
+  /** Bs available at the provider (funded minus completed pay-outs). */
+  bsAvailable: Money;
+  /** Bs paid out through COMPLETED pay-outs. */
+  bsPaidOut: Money;
 }
 
 export interface IngestionNotes {
-  /** Funding events delivered again with identical content (ignored). */
+  /** Events delivered again with identical content (ignored). */
   duplicateEventIds: string[];
-  /** Funding events delivered again with different content (first one kept; needs review). */
+  /** Events delivered again with different content (first one kept; needs review). */
   conflictingEventIds: string[];
 }
 
@@ -44,10 +50,12 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
   const upToCutoff = <T extends { at: Date }>(item: T): boolean => item.at.getTime() <= cutoff;
 
   const funding = dedupeById(input.fundingEvents, (e) => e.eventId, fingerprintFundingEvent);
+  const payouts = dedupeById(input.payoutEvents, (e) => e.eventId, fingerprintPayoutEvent);
 
   const ledger = [
     ...input.deposits.filter(upToCutoff).map(postDeposit),
     ...funding.unique.filter(upToCutoff).map(postFunding),
+    ...payouts.unique.filter(upToCutoff).flatMap((e) => postPayout(e) ?? []),
   ].sort((a, b) => a.at.getTime() - b.at.getTime() || a.id.localeCompare(b.id));
   assertBalanced(ledger);
 
@@ -57,11 +65,13 @@ export function reconcile(input: ReconcileInput, config: ReconcileConfig): Recon
       usdtUnconverted: accounts.get('USDT_WALLET_PENDING') ?? Money.zero('USDT'),
       usdtConverted: accounts.get('USDT_CONVERTED') ?? Money.zero('USDT'),
       bsFunded: (accounts.get('FX_CLEARING') ?? Money.zero('BS')).negate(),
+      bsAvailable: accounts.get('BS_PROVIDER_BALANCE') ?? Money.zero('BS'),
+      bsPaidOut: accounts.get('BS_PAID_OUT') ?? Money.zero('BS'),
     },
     ledger,
     ingestion: {
-      duplicateEventIds: funding.duplicates.map((e) => e.eventId),
-      conflictingEventIds: funding.conflicts.map((e) => e.eventId),
+      duplicateEventIds: [...funding.duplicates, ...payouts.duplicates].map((e) => e.eventId),
+      conflictingEventIds: [...funding.conflicts, ...payouts.conflicts].map((e) => e.eventId),
     },
   };
 }

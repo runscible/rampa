@@ -7,6 +7,7 @@ export type Account =
   | 'USDT_CONVERTED'
   | 'PARTNER_PREFUND'
   | 'BS_PROVIDER_BALANCE'
+  | 'BS_PAID_OUT'
   | 'FX_CLEARING';
 
 export const ACCOUNT_CURRENCY: Record<Account, Currency> = {
@@ -14,6 +15,7 @@ export const ACCOUNT_CURRENCY: Record<Account, Currency> = {
   USDT_CONVERTED: 'USDT',
   PARTNER_PREFUND: 'USDT',
   BS_PROVIDER_BALANCE: 'BS',
+  BS_PAID_OUT: 'BS',
   FX_CLEARING: 'BS',
 };
 

@@ -47,17 +47,25 @@ describe('reconcileFiles: deposits only (slice 1)', () => {
     expect(result.parseErrors).toEqual([{ file: 'usdt_deposits.csv', line: 3, reason: expect.stringContaining('oops') }]);
   });
 
-  it('real data: 14,500 USDT converted, 1,500 still pending, 141,626.50 Bs funded', () => {
+  it('real data: 14,500 USDT converted, 1,500 pending, 141,626.50 Bs funded, 132,605.55 Bs completed (before reversals)', () => {
     const read = (name: string) => readFileSync(join(__dirname, '..', '..', 'data', name), 'utf8');
     const result = reconcileFiles(
-      { deposits: read('usdt_deposits.csv'), fundingWebhooks: read('funding_webhooks.json') },
+      { deposits: read('usdt_deposits.csv'), fundingWebhooks: read('funding_webhooks.json'), payoutEvents: read('payout_events.json') },
       CUTOFF,
     );
+    expect(result.balances.bsPaidOut.toString()).toBe('132605.55');
+    expect(result.balances.bsAvailable.toString()).toBe('9020.95');
+    expect(result.ingestion.duplicateEventIds).toEqual(['pe_0029']);
     expect(result.balances.usdtUnconverted.toString()).toBe('1500.00');
     expect(result.balances.usdtConverted.toString()).toBe('14500.00');
     expect(result.balances.bsFunded.toString()).toBe('141626.50');
     expect(result.parseErrors).toEqual([]);
     expect(() => assertBalanced(result.ledger)).not.toThrow();
+  });
+
+  it('surfaces payout parse errors with the file name', () => {
+    const result = reconcileFiles({ deposits: HEADER, payoutEvents: '[{}]' }, CUTOFF);
+    expect(result.parseErrors).toEqual([{ file: 'payout_events.json', line: 1, reason: expect.stringContaining('event_id') }]);
   });
 
   it('surfaces funding webhook parse errors with the file name', () => {

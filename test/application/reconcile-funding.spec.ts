@@ -21,7 +21,7 @@ const funding = (over: Record<string, unknown> = {}) =>
 
 describe('reconcile with funding events', () => {
   it('converts USDT and funds Bs', () => {
-    const r = reconcile({ deposits, fundingEvents: [funding()] }, CONFIG);
+    const r = reconcile({ deposits, fundingEvents: [funding()], payoutEvents: [] }, CONFIG);
     expect(r.balances.usdtUnconverted.toString()).toBe('1500.00');
     expect(r.balances.usdtConverted.toString()).toBe('5000.00');
     expect(r.balances.bsFunded.toString()).toBe('48972.50');
@@ -30,27 +30,27 @@ describe('reconcile with funding events', () => {
 
   it('excludes funding events after the cutoff', () => {
     const late = funding({ timestamp: '2026-10-05T20:00:01-04:00' });
-    const r = reconcile({ deposits, fundingEvents: [late] }, CONFIG);
+    const r = reconcile({ deposits, fundingEvents: [late], payoutEvents: [] }, CONFIG);
     expect(r.balances.usdtConverted.toString()).toBe('0.00');
     expect(r.balances.bsFunded.toString()).toBe('0.00');
   });
 
   it('is idempotent: the same event delivered twice counts once and is reported', () => {
-    const r = reconcile({ deposits, fundingEvents: [funding(), funding()] }, CONFIG);
+    const r = reconcile({ deposits, fundingEvents: [funding(), funding()], payoutEvents: [] }, CONFIG);
     expect(r.balances.bsFunded.toString()).toBe('48972.50');
     expect(r.ingestion.duplicateEventIds).toEqual(['fw_001']);
   });
 
   it('keeps the first when the same id arrives with different content, and reports the conflict', () => {
-    const r = reconcile({ deposits, fundingEvents: [funding(), funding({ amountBs: 50000 })] }, CONFIG);
+    const r = reconcile({ deposits, fundingEvents: [funding(), funding({ amountBs: 50000 })], payoutEvents: [] }, CONFIG);
     expect(r.balances.bsFunded.toString()).toBe('48972.50');
     expect(r.ingestion.conflictingEventIds).toEqual(['fw_001']);
   });
 
   it('gives the same result for any input order', () => {
     const second = funding({ eventId: 'fw_002', depositTxHash: '0x2', amountUsdt: 1500, amountBs: 14700, timestamp: '2026-10-05T17:50:00-04:00' });
-    const a = reconcile({ deposits, fundingEvents: [funding(), second] }, CONFIG);
-    const b = reconcile({ deposits: [...deposits].reverse(), fundingEvents: [second, funding()] }, CONFIG);
+    const a = reconcile({ deposits, fundingEvents: [funding(), second], payoutEvents: [] }, CONFIG);
+    const b = reconcile({ deposits: [...deposits].reverse(), fundingEvents: [second, funding()], payoutEvents: [] }, CONFIG);
     expect(b.ledger.map((e) => e.id)).toEqual(a.ledger.map((e) => e.id));
     expect(b.balances.bsFunded.toString()).toBe(a.balances.bsFunded.toString());
   });

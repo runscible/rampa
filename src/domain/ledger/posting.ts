@@ -1,5 +1,6 @@
 import { Deposit } from '../deposits/deposit';
 import { FundingEvent } from '../funding/funding-event';
+import { PayoutEvent } from '../payouts/payout-event';
 import { JournalEntry } from './ledger';
 
 /** USDT arrives at the provider's wallet: Dr USDT_WALLET_PENDING / Cr PARTNER_PREFUND. */
@@ -27,6 +28,22 @@ export function postFunding(event: FundingEvent): JournalEntry {
       { account: 'USDT_WALLET_PENDING', amount: event.amountUsdt.negate() },
       { account: 'BS_PROVIDER_BALANCE', amount: event.amountBs },
       { account: 'FX_CLEARING', amount: event.amountBs.negate() },
+    ],
+  };
+}
+
+/**
+ * The provider debits the Bs balance when a pay-out is COMPLETED: Dr BS_PAID_OUT / Cr BS_PROVIDER_BALANCE.
+ * Other event types do not move money (the provider reserves nothing at PREVIEW or CONFIRM) and return null.
+ */
+export function postPayout(event: PayoutEvent): JournalEntry | null {
+  if (event.type !== 'COMPLETED') return null;
+  return {
+    id: `payout:${event.eventId}`,
+    at: event.at,
+    lines: [
+      { account: 'BS_PAID_OUT', amount: event.amountBs },
+      { account: 'BS_PROVIDER_BALANCE', amount: event.amountBs.negate() },
     ],
   };
 }
