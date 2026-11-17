@@ -4,6 +4,22 @@ A small Nest.js service that reconciles a USDT → Bs payment flow. A partner pr
 
 Design notes for contributors are in [`ARCHITECTURE.md`](ARCHITECTURE.md); the assignment is in [`BRIEF.md`](BRIEF.md).
 
+## What this service is, and what it is not
+
+It is the **book of record and auditor** of the flow: it keeps what each party reported, derives the ledger and the balances from it, and says what does not add up. It is a source of facts, not a decision maker.
+
+**It is responsible for**
+- Keeping every delivery from the four feeds, in arrival order, without rewriting anything.
+- Deriving the double-entry ledger and the balances from that log, always the same way.
+- Following each pay-out through its lifecycle and saying how far it got.
+- Reporting what does not reconcile, with the reason, without correcting it: the ledger records what the provider said, and the break says it is wrong.
+
+**It is not responsible for** moving money, deciding or running rollbacks and compensations, retrying pay-outs, talking to the provider or authorising anything. Other services do that: they read these facts and decide. The only rollback that belongs here is the ingestion itself (a request is all or nothing). A provider-side reversal is recorded as a compensating entry, never by deleting anything.
+
+**What callers can rely on**
+- Input: sending the same data again changes nothing, the order does not matter, and a request is stored completely or not at all.
+- Output: every figure is rebuilt from the delivery log, so it can be traced back to events. Events that make no sense are not applied, but they show up as breaks. What the service cannot corroborate is reported as a break or a review, never smoothed over.
+
 ## Run it
 
 ```bash
