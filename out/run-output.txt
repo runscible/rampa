@@ -35,5 +35,3 @@ LEDGER ACCOUNTS (debit +, credit -)
   BS_PAID_OUT                        129,505.55 Bs
   FX_CLEARING                       -141,626.50 Bs
   Ledger balanced: yes (24 entries)
-
-INPUT PROBLEMS (none)

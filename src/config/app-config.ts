@@ -9,8 +9,6 @@ export interface AppConfig {
   payoutSlaMinutes: number;
   /** Max provider spread vs. the reference rate, as a decimal string (0.005 = 0.5%). */
   maxSpread: string;
-  /** Decimal places kept for FX rates. */
-  rateDecimals: number;
   /** SQLite file path, or ':memory:' for a throwaway database. */
   dbPath: string;
 }
@@ -21,7 +19,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   fundingSlaMinutes: 10,
   payoutSlaMinutes: 15,
   maxSpread: '0.005',
-  rateDecimals: 6,
   dbPath: 'recon.sqlite',
 };
 
@@ -34,7 +31,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     fundingSlaMinutes: Number(env.RECON_FUNDING_SLA_MINUTES ?? DEFAULT_CONFIG.fundingSlaMinutes),
     payoutSlaMinutes: Number(env.RECON_PAYOUT_SLA_MINUTES ?? DEFAULT_CONFIG.payoutSlaMinutes),
     maxSpread: env.RECON_MAX_SPREAD ?? DEFAULT_CONFIG.maxSpread,
-    rateDecimals: Number(env.RECON_RATE_DECIMALS ?? DEFAULT_CONFIG.rateDecimals),
     dbPath: env.RECON_DB_PATH ?? DEFAULT_CONFIG.dbPath,
   };
 }

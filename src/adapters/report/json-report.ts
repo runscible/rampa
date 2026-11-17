@@ -1,8 +1,8 @@
-import { Balances } from '../../application/reconcile';
+import { Balances, ReconcileResult } from '../../application/reconcile';
 import { Break } from '../../domain/breaks/break';
 import { ACCOUNT_CURRENCY, JournalEntry } from '../../domain/ledger/ledger';
 import { formatInZone } from '../../domain/shared/time';
-import { ReportInput, ReportOptions } from './text-report';
+import { ReportOptions } from './text-report';
 
 export const balancesJson = (b: Balances) => ({
   usdtUnconverted: b.usdtUnconverted.toString(),
@@ -34,7 +34,7 @@ export const ledgerJson = (ledger: JournalEntry[]) =>
   }));
 
 /** Machine-readable report. No clock and no randomness: the same inputs give the same bytes. */
-export function renderJsonReport(result: ReportInput, options: ReportOptions): string {
+export function renderJsonReport(result: ReconcileResult, options: ReportOptions): string {
   const flagged = (items: Array<{ event: { eventId: string; payoutId: string }; reason: string }>) =>
     items.map(({ event, reason }) => ({ eventId: event.eventId, payoutId: event.payoutId, reason }));
 
@@ -49,7 +49,6 @@ export function renderJsonReport(result: ReportInput, options: ReportOptions): s
       irregularPayoutEvents: flagged(result.ingestion.irregularPayoutEvents),
       rejectedPayoutEvents: flagged(result.ingestion.rejectedPayoutEvents),
     },
-    parseErrors: result.parseErrors ?? [],
     ledger: ledgerJson(result.ledger),
   };
   return `${JSON.stringify(report, null, 2)}\n`;

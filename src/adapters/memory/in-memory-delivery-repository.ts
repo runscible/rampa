@@ -1,7 +1,7 @@
 import { FeedName, FeedRecords } from '../../application/feeds';
 import { Delivery, DeliveryRepository } from '../../application/ports';
 
-/** Delivery log kept in process memory. Used by tests and as the default when no database is configured. */
+/** Delivery log kept in process memory. Used by unit tests; the server runs on SQLite. */
 export class InMemoryDeliveryRepository implements DeliveryRepository {
   private readonly logs = new Map<FeedName, Array<Delivery<unknown>>>();
 

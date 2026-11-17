@@ -1,15 +1,15 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import { reconcileFiles } from '../../src/adapters/files/reconcile-files';
+import { InMemoryDeliveryRepository } from '../../src/adapters/memory/in-memory-delivery-repository';
+import { ReconcileResult } from '../../src/application/reconcile';
+import { ReconciliationService } from '../../src/application/reconciliation-service';
 import { renderJsonReport } from '../../src/adapters/report/json-report';
 import { formatAmount, renderTextReport } from '../../src/adapters/report/text-report';
+import { reconcileRealData } from '../support/real-data';
 
 const OPTIONS = { cutoff: '2026-10-05T20:00:00-04:00', timeZone: 'America/La_Paz' };
-const read = (name: string) => readFileSync(join(__dirname, '..', '..', 'data', name), 'utf8');
-const result = reconcileFiles(
-  { deposits: read('usdt_deposits.csv'), fundingWebhooks: read('funding_webhooks.json'), payoutEvents: read('payout_events.json'), referenceRates: read('reference_rates.csv') },
-  { cutoff: OPTIONS.cutoff },
-);
+let result: ReconcileResult;
+beforeAll(async () => {
+  result = await reconcileRealData();
+});
 
 describe('formatAmount', () => {
   it.each([
@@ -25,7 +25,10 @@ describe('formatAmount', () => {
 });
 
 describe('renderTextReport', () => {
-  const text = renderTextReport(result, OPTIONS);
+  let text: string;
+  beforeAll(() => {
+    text = renderTextReport(result, OPTIONS);
+  });
 
   it('states the cutoff and time zone', () => {
     expect(text).toContain('As of 2026-10-05T20:00:00-04:00 (America/La_Paz)');
@@ -58,15 +61,9 @@ describe('renderTextReport', () => {
     expect(text).toMatch(/Ledger balanced:\s+yes/);
   });
 
-  it('says so when there is nothing wrong and when inputs were clean', () => {
-    const clean = renderTextReport(reconcileFiles({ deposits: 'tx_hash,amount_usdt,timestamp' }, { cutoff: OPTIONS.cutoff }), OPTIONS);
-    expect(clean).toContain('BREAKS (none)');
-    expect(clean).toContain('INPUT PROBLEMS (none)');
-  });
-
-  it('lists input problems with file and line', () => {
-    const bad = renderTextReport(reconcileFiles({ deposits: 'tx_hash,amount_usdt,timestamp\n0x1,oops,2026-10-05T08:00:00-04:00' }, { cutoff: OPTIONS.cutoff }), OPTIONS);
-    expect(bad).toMatch(/usdt_deposits\.csv:2\s+.*oops/);
+  it('says so when there is nothing wrong', async () => {
+    const empty = await new ReconciliationService(new InMemoryDeliveryRepository(), { cutoff: OPTIONS.cutoff }).report();
+    expect(renderTextReport(empty, OPTIONS)).toContain('BREAKS (none)');
   });
 
   it('is deterministic: no clock, no randomness', () => {
@@ -75,7 +72,10 @@ describe('renderTextReport', () => {
 });
 
 describe('renderJsonReport', () => {
-  const json = JSON.parse(renderJsonReport(result, OPTIONS));
+  let json: any;
+  beforeAll(() => {
+    json = JSON.parse(renderJsonReport(result, OPTIONS));
+  });
 
   it('carries the cutoff, zone and balances as exact strings', () => {
     expect(json.asOf).toBe(OPTIONS.cutoff);
